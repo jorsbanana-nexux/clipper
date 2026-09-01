@@ -45,6 +45,9 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Analisis dulu, download kemudian** — AI membaca transkrip (dari caption, 0 MB audio),
   menemukan momen (mis. menit `01:20–02:34`), lalu hanya segmen video itu yang diunduh → hemat bandwith & waktu.
 - **Face tracking nyata** (MediaPipe + OpenCV Haar fallback) — bingkai 9:16 mengikuti wajah pembicara.
+- **Multi-speaker (v0.2)** — deteksi banyak wajah, split-screen duo (2 pembicara), dan speaker
+  diarization opsional (pyannote) untuk auto-decision single vs duo. Tanpa `HUGGINGFACE_TOKEN`
+  otomatis fallback ke single-speaker (ringan).
 - **Subtitle word-by-word** — font tebal (Montserrat/Bebas Neue), highlight per kata, margin aman.
 - **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
 - **Efek viral** — kontras + saturasi + sharpen ringan.
@@ -127,13 +130,14 @@ Roadmap detail & prioritas lengkap (untuk agent masa depan) ada di
 | Fase | Fokus | Status |
 |------|-------|--------|
 | A | Akurasi & hardening dasar (uji end-to-end, frame-accurate, font, bahasa) | ⬜ P0 |
-| B | Multi-speaker split-screen + dynamic speaker switching | ⬜ P0 |
+| B | Multi-speaker split-screen + dynamic speaker switching | 🟡 v0.2 (diarization opsional; dynamic-switch in-clip = B5 tersisa) |
 | C | Subtitle & efek profesional | ⬜ P1 |
 | D | Platform (TikTok/IG/X) & pengunduhan | ⬜ P1 |
 | E | State, storage, observability | ⬜ P1 |
 | F | Frontend UX | ⬜ P1 |
 | G | Deployment, testing, keamanan | ⬜ P2 |
 
-**Selesai:** v0.1 backend pipeline + frontend (download → transkrip → analisis → clip → reframe → subtitle → efek → library).
+**Selesai:** v0.1 pipeline + frontend; **v0.2 multi-speaker** (diarization opsional, multi-face,
+split-screen duo, layout engine).
 
 > Panduan lengkap + daftar gap ya, mulai dari `docs/ROADMAP.md` §3 (kekurangan) & §4 (rencana).
