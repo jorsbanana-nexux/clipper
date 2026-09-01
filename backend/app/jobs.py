@@ -16,7 +16,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from . import config, downloader, transcriber, analyzer, subtitles, face_tracker, renderer, diarization, layout
+from . import config, downloader, transcriber, analyzer, subtitles, face_tracker, renderer, diarization, layout, compositor
 from .models import ClipInfo, JobStatus
 
 
@@ -86,10 +86,21 @@ async def _run_pipeline(job: Job, request) -> None:
         # ---- 2. analysis ----
         job.update(status="analyzing", stage="analyze", progress=0.35,
                    message="Finding viral moments...")
+        # B2: run diarization once on the full audio (if enabled) so analysis is
+        # speaker-aware. On the captions path we may not have the full audio yet,
+        # so diarization is skipped there (turns = []).
+        analysis_turns: list[dict] = []
+        if diarization.diarization_available() and not used_captions:
+            try:
+                full_audio = str(work_dir / "diar_full.wav")
+                await asyncio.to_thread(renderer.cut_audio, audio_path, 0.0, duration, full_audio)
+                analysis_turns = await asyncio.to_thread(diarization.diarize, full_audio)
+            except Exception:
+                analysis_turns = []
         analysis = await asyncio.to_thread(
             analyzer.find_viral_moments,
             transcript_text, analysis_segments, request.max_clips,
-            config.MIN_CLIP_SEC, config.MAX_CLIP_SEC,
+            config.MIN_CLIP_SEC, config.MAX_CLIP_SEC, analysis_turns,
         )
         highlights = analysis.highlights[:request.max_clips]
 
@@ -151,14 +162,25 @@ async def _run_pipeline(job: Job, request) -> None:
                     turns = await asyncio.to_thread(diarization.diarize, diar_audio)
                 except Exception:
                     turns = []
+            # ---- B5 dynamic switching: build a clip-relative layout timeline ----
             if config.LAYOUT_MODE in ("single", "duo"):
                 clip_layout = config.LAYOUT_MODE
+                timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
+            elif turns:
+                # absolute-turn timeline -> clip-relative -> per-segment layouts
+                abs_timeline = layout.layout_timeline(turns, hl.start_time, hl.end_time)
+                timeline = compositor.rel_timeline(abs_timeline, padded_start)
+                timeline = [s for s in timeline if s["end"] > s["start"]]
             else:
-                clip_layout = layout.choose_template(turns, hl.start_time, hl.end_time)
+                clip_layout = layout.choose_template([], 0.0, 0.0)
+                timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
 
-            # reframe to 9:16 (single crop-follow OR duo split-screen)
+            # reframe to 9:16 (single crop-follow OR duo split-screen OR dynamic mix)
             vertical = str(seg_dir / "vertical.mp4")
-            if clip_layout == "duo":
+            distinct = {s.get("layout") for s in timeline}
+            if len(timeline) > 1 and len(distinct) > 1:
+                await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
+            elif timeline and timeline[0].get("layout") == "duo":
                 await asyncio.to_thread(face_tracker.reframe_duo, raw_path, vertical)
             else:
                 samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
