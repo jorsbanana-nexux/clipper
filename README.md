@@ -121,11 +121,19 @@ BACKEND_URL=http://localhost:8000 npm run dev
 
 ## 📌 Status & Roadmap
 
-Lihat [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) untuk detail lengkap.
-Ringkas:
+Roadmap detail & prioritas lengkap (untuk agent masa depan) ada di
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Ringkas fase:
 
-- [x] **v0.1** — Backend pipeline (download → transkrip → analisis → clip → reframe → subtitle → efek)
-- [x] **v0.1** — Frontend (paste URL, progress, library unduh)
-- [ ] **v0.2** — Multi-speaker split-screen + dynamic speaker switching
-- [ ] **v0.3** — TikTok/Instagram download hardening, caption IG/TikTok
-- [ ] **v1.0** — Mode 2 (Keyword), autentikasi, Redis state, produksi
+| Fase | Fokus | Status |
+|------|-------|--------|
+| A | Akurasi & hardening dasar (uji end-to-end, frame-accurate, font, bahasa) | ⬜ P0 |
+| B | Multi-speaker split-screen + dynamic speaker switching | ⬜ P0 |
+| C | Subtitle & efek profesional | ⬜ P1 |
+| D | Platform (TikTok/IG/X) & pengunduhan | ⬜ P1 |
+| E | State, storage, observability | ⬜ P1 |
+| F | Frontend UX | ⬜ P1 |
+| G | Deployment, testing, keamanan | ⬜ P2 |
+
+**Selesai:** v0.1 backend pipeline + frontend (download → transkrip → analisis → clip → reframe → subtitle → efek → library).
+
+> Panduan lengkap + daftar gap ya, mulai dari `docs/ROADMAP.md` §3 (kekurangan) & §4 (rencana).
