@@ -1,0 +1,9 @@
+fastapi==0.116.1
+uvicorn[standard]==0.34.0
+pydantic==2.10.6
+yt-dlp==2025.8.11
+openai==1.99.7
+opencv-python-headless==4.10.0.84
+mediapipe==0.10.14
+numpy==1.26.4
+python-multipart==0.0.20
