@@ -49,6 +49,7 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
 - **Efek viral** — kontras + saturasi + sharpen ringan.
 - **Padding 1,5 detik** — tiap clip dipotong sedikit lebih lebar agar momen selalu utuh (anti-terpotong).
+- **Auto-chunk 25 MiB** — audio panjang >25 MB otomatis dipecah agar lolos batas Whisper (podcast panjang aman).
 - **Deteksi bahasa otomatis** — Whisper auto-detect semua bahasa.
 
 ---
