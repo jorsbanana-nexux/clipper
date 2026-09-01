@@ -131,7 +131,8 @@ Inti "wawancara/podcast multi-orang" yang diminta user.
 - [x] **B3 — Multi-face tracking.** ✅ `face_tracker.analyze_faces_all` deteksi banyak wajah
       (urut ukuran/confidence). Pemilihan pembicara aktif via diarization (B1).
 - [x] **B4 — Split-screen dua pembicara.** ✅ `face_tracker.reframe_duo` (vstack atas-bawah 9:16).
-      Template `single`/`duo`/`share` di `layout.py`.
+      `two_halves=True` memotong **kiri/kanan** sumber (dua speaker berdampingan) lalu menumpuk
+      vertikal — diuji dengan sumber kiri-merah/kanan-biru. Template `single`/`duo`/`share` di `layout.py`.
 - [x] **B5 — Dynamic speaker switching.** ✅ `compositor.py` render timeline multi-template per clip
       (single ↔ duo) + crossfade `xfade`, audio di-mux ulang agar tetap sinkron. Aktif saat
       diarization tersedia dan clip punya >1 layout berbeda.
