@@ -38,6 +38,8 @@ def _probe_duration(audio_path: str) -> float:
 
 
 def _transcribe_single(audio_path: str, client: OpenAI, language: str | None) -> dict:
+    """Transcribe one file. Returns the data as-is (may be empty for a
+    near-silent trailing chunk). Callers decide whether empty is fatal."""
     with open(audio_path, "rb") as fh:
         resp = client.audio.transcriptions.create(
             model=config.WHISPER_MODEL,
@@ -46,10 +48,7 @@ def _transcribe_single(audio_path: str, client: OpenAI, language: str | None) ->
             timestamp_granularities=["word"],
             language=language,
         )
-    data = resp if isinstance(resp, dict) else getattr(resp, "model_dump", lambda: dict(resp))()
-    if not data.get("text", "").strip():
-        raise RuntimeError(f"Whisper returned empty transcription for {audio_path} (audio may be silent).")
-    return data
+    return resp if isinstance(resp, dict) else getattr(resp, "model_dump", lambda: dict(resp))()
 
 
 def _shift(data: dict, offset: float) -> dict:
@@ -105,7 +104,10 @@ def transcribe(audio_path: str, language: str | None = None) -> dict:
     size = os.path.getsize(audio_path)
 
     if size <= MAX_WHISPER_BYTES:
-        return _transcribe_single(audio_path, client, language)
+        data = _transcribe_single(audio_path, client, language)
+        if not data.get("text", "").strip():
+            raise RuntimeError("Whisper returned empty transcription (audio may be silent).")
+        return data
 
     # Large file -> split into chunks under 25 MiB, transcribe, and merge.
     duration = max(_probe_duration(audio_path), 1.0)
@@ -119,9 +121,18 @@ def transcribe(audio_path: str, language: str | None = None) -> dict:
         results = []
         offset = 0.0
         for cp in chunks_paths:
-            data = _transcribe_single(cp, client, language)
-            results.append(_shift(data, offset))
-            offset += max(_probe_duration(cp), 0.0)  # advance by this chunk's real duration
+            chunk_dur = max(_probe_duration(cp), 0.0)
+            try:
+                data = _transcribe_single(cp, client, language)
+            except Exception:
+                data = {"text": "", "words": [], "segments": []}
+            # Keep offset advancing even if this chunk is silent/failed, so the
+            # timestamps of later chunks remain correct.
+            if data.get("text", "").strip() or data.get("words") or data.get("segments"):
+                results.append(_shift(data, offset))
+            offset += chunk_dur
+        if not results:
+            raise RuntimeError("Whisper returned no transcription for any chunk (audio may be silent).")
         return _merge(results)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
