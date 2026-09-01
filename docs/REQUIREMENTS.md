@@ -152,8 +152,11 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 
 - **Analisis dulu, download kemudian** (bukan download penuh dulu) → hemat bandwith.
 - **Captions-first** — transkrip dari caption YouTube (0 MB audio) bila tersedia; Whisper
-  hanya untuk segmen audio terpilih (word timestamps subtitle). Ini juga menghindari
-  batas 25 MB file audio OpenAI Whisper untuk podcast panjang.
+  hanya untuk segmen audio terpilih (word timestamps subtitle).
+- **Auto-chunk 25 MiB** (`transcriber.py`) — jalur fallback (audio penuh) dipecah otomatis
+  di bawah batas 25 MiB OpenAI Whisper, tiap potongan ditranskrip lalu digabung dengan
+  offset timestamp yang benar. Chunk senyap/kosong ditoleransi tanpa menggagalkan proses.
+  Ini membuat podcast panjang (>25 MB audio) tetap jalan.
 - **Audio vs video**: audio ringan (~57 MB/jam), video berat (~0.6–1.5 GB/jam) — itulah
   kenapa penghematan difokuskan ke unduhan video (hanya segmen terpilih).
 - **Padding 1,5 detik** (`CLIPPER_PADDING_SEC`): setiap segmen dipotong sedikit lebih lebar
