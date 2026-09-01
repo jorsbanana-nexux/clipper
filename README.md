@@ -31,14 +31,19 @@ Terbagi menjadi **2 mode**:
 ## ⚙️ Cara Kerja (Mode 1 — Podcast)
 
 ```
-tempel URL ──► unduh AUDIO saja (ringan) ──► Whisper transkrip (word timestamps)
-     ──► GPT analisis momen viral (6–10 klip) ──► unduh HANYA segmen terpilih
+tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT analisis momen viral
+     ──► unduh HANYA segmen video terpilih ──► Whisper HANYA segmen audio terpilih
      ──► face-track & reframe 9:16 ──► subtitle word-by-word ──► efek ──► library unduh
 ```
 
+> **Optimasi ringan (low-spec friendly):** transkrip diambil dari caption YouTube/auto-caption
+> **tanpa mengunduh audio**. Whisper hanya dipakai untuk **segmen audio terpilih** (dapat
+> word-timestamps akurat untuk subtitle). Fallback ke unduh audio penuh hanya bila video
+> tidak punya caption sama sekali.
+
 **Fitur utama:**
-- **Analisis dulu, download kemudian** — AI menonton transkrip, menemukan momen
-  (mis. menit `01:20–02:34`), lalu hanya segmen itu yang diunduh → hemat bandwith & waktu.
+- **Analisis dulu, download kemudian** — AI membaca transkrip (dari caption, 0 MB audio),
+  menemukan momen (mis. menit `01:20–02:34`), lalu hanya segmen video itu yang diunduh → hemat bandwith & waktu.
 - **Face tracking nyata** (MediaPipe + OpenCV Haar fallback) — bingkai 9:16 mengikuti wajah pembicara.
 - **Subtitle word-by-word** — font tebal (Montserrat/Bebas Neue), highlight per kata, margin aman.
 - **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
