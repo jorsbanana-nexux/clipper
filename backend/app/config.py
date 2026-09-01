@@ -2,9 +2,18 @@
 
 All values come from environment variables with sensible defaults, so the
 service can be deployed anywhere (local, Docker, a VPS) without code changes.
+
+A `.env` file at the REPO ROOT is loaded automatically (python-dotenv), so
+`setup.bat` / `launcher.bat` can persist credentials there.
 """
 import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Repo root is three levels up from this file (backend/app/config.py).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_REPO_ROOT / ".env", override=False)  # env vars win over .env
 
 # --- AI (bring your own key) ---
 OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
