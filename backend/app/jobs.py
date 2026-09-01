@@ -16,7 +16,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from . import config, downloader, transcriber, analyzer, subtitles, face_tracker, renderer
+from . import config, downloader, transcriber, analyzer, subtitles, face_tracker, renderer, diarization, layout
 from .models import ClipInfo, JobStatus
 
 
@@ -119,6 +119,7 @@ async def _run_pipeline(job: Job, request) -> None:
             #   captions path -> download only this (padded) audio segment + Whisper (accurate word timing)
             #   fallback path -> reuse full-transcript words (already have them)
             local_words: list[dict] = []
+            aseg: str | None = None
             if used_captions:
                 try:
                     aseg = await asyncio.to_thread(
@@ -134,10 +135,30 @@ async def _run_pipeline(job: Job, request) -> None:
                     if w["end"] >= padded_start and w["start"] <= padded_end
                 ]
 
-            # face-track reframe to 9:16
-            samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
+            # --- v0.2 multi-speaker: decide single vs duo via diarization (optional) ---
+            turns: list[dict] = []
+            if diarization.diarization_available():
+                try:
+                    if aseg:
+                        diar_audio = aseg
+                    else:
+                        diar_audio = str(seg_dir / "diar_audio.wav")
+                        await asyncio.to_thread(renderer.cut_audio, audio_path, padded_start, padded_end, diar_audio)
+                    turns = await asyncio.to_thread(diarization.diarize, diar_audio)
+                except Exception:
+                    turns = []
+            if config.LAYOUT_MODE in ("single", "duo"):
+                clip_layout = config.LAYOUT_MODE
+            else:
+                clip_layout = layout.choose_template(turns, hl.start_time, hl.end_time)
+
+            # reframe to 9:16 (single crop-follow OR duo split-screen)
             vertical = str(seg_dir / "vertical.mp4")
-            await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
+            if clip_layout == "duo":
+                await asyncio.to_thread(face_tracker.reframe_duo, raw_path, vertical)
+            else:
+                samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
+                await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
 
             # word-by-word subtitles + effects
             ass_path = str(seg_dir / "subs.ass")
