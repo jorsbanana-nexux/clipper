@@ -39,3 +39,23 @@ HUGGINGFACE_TOKEN: str = os.environ.get("HUGGINGFACE_TOKEN", "")
 # Layout template used per clip: "single" (follow active speaker) or "duo"
 # (split-screen, two speakers). Empty = auto (decided by diarization).
 LAYOUT_MODE: str = os.environ.get("CLIPPER_LAYOUT_MODE", "auto")
+
+# --- Fase A: accuracy & hardening ---
+# Cut strategy for clip boundaries: "fast" (stream copy -> keyframe-aligned, ~2-5s
+# slop) or "accurate" (re-encode -> frame-accurate, slower/heavier).
+CUT_MODE: str = os.environ.get("CLIPPER_CUT_MODE", "accurate")
+
+# Directory with subtitle fonts (optional). If set and non-empty, ASS render uses
+# fontsdir=... so the chosen SUBTITLE_FONT is bundled reliably.
+FONT_DIR: str = os.environ.get("CLIPPER_FONT_DIR", "")
+
+# Retention: delete job output folders older than N days (0 = keep forever).
+RETENTION_DAYS: float = float(os.environ.get("CLIPPER_RETENTION_DAYS", "7"))
+
+# yt-dlp resilience (optional).
+YDL_COOKIES_FILE: str = os.environ.get("YDL_COOKIES_FILE", "")   # path to cookies.txt
+YDL_PROXY: str = os.environ.get("YDL_PROXY", "")                 # e.g. http://127.0.0.1:8888
+YDL_RETRIES: int = int(os.environ.get("YDL_RETRIES", "3"))
+
+# Clip rendering concurrency. Default 1 (sequential) = low-spec friendly.
+MAX_PARALLEL: int = int(os.environ.get("CLIPPER_MAX_PARALLEL", "1"))
