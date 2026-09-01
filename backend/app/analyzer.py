@@ -38,6 +38,21 @@ def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur, t
     has_turns = bool(turns)
     turns_block = _format_turns(turns) if has_turns else "(no speaker diarization available)"
 
+    if has_turns:
+        speaker_instruction = (
+            "Speaker diarization IS available. For each viral moment, fill the "
+            "'speaker' field with the PRIMARY speaker label and 'speakers' with ALL "
+            "labels active in that window. Prefer moments where two speakers exchange "
+            "(disagreement, interruption, rapid back-and-forth) - those tend to go viral."
+        )
+        fill_note = ""
+    else:
+        speaker_instruction = (
+            "Speaker diarization is NOT available. Leave 'speaker' empty and "
+            "'speakers' empty."
+        )
+        fill_note = ""
+
     prompt = dedent("""
         You are an elite short-form video editor. Given a podcast transcript with
         timestamps, pick the {max_clips} most viral-worthy, emotionally engaging
@@ -64,17 +79,7 @@ def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur, t
         max_dur=int(max_dur),
         segments=_format_segments(segments),
         turns=turns_block,
-        speaker_instruction=(
-            "Speaker diarization IS available. For each viral moment, fill the
-"
-            "        'speaker' field with the PRIMARY speaker label and 'speakers' with ALL
-"
-            "        labels active in that window. Prefer moments where two speakers exchange
-"
-            "        (disagreement, interruption, rapid back-and-forth) — those tend to go viral."
-            if has_turns else
-            "Speaker diarization is NOT available. Leave 'speaker' empty and 'speakers' empty."
-        ),
+        speaker_instruction=speaker_instruction,
     )
 
     client = OpenAI(api_key=config.OPENAI_API_KEY)
