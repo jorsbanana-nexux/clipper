@@ -48,6 +48,7 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Subtitle word-by-word** — font tebal (Montserrat/Bebas Neue), highlight per kata, margin aman.
 - **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
 - **Efek viral** — kontras + saturasi + sharpen ringan.
+- **Padding 1,5 detik** — tiap clip dipotong sedikit lebih lebar agar momen selalu utuh (anti-terpotong).
 - **Deteksi bahasa otomatis** — Whisper auto-detect semua bahasa.
 
 ---
