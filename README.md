@@ -46,6 +46,7 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
   menemukan momen (mis. menit `01:20–02:34`), lalu hanya segmen video itu yang diunduh → hemat bandwith & waktu.
 - **Face tracking nyata** (MediaPipe + OpenCV Haar fallback) — bingkai 9:16 mengikuti wajah pembicara.
 - **Multi-speaker (v0.2)** — deteksi banyak wajah, split-screen duo (2 pembicara), dan speaker
+  (crop kiri/kanan untuk 2 pembicara berdampingan), dan speaker
   diarization opsional (pyannote) untuk auto-decision single vs duo. Tanpa `HUGGINGFACE_TOKEN`
   otomatis fallback ke single-speaker (ringan).
 - **Subtitle word-by-word** — font tebal (Montserrat/Bebas Neue), highlight per kata, margin aman.
