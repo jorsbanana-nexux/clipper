@@ -29,3 +29,13 @@ TARGET_HEIGHT: int = 1920
 # --- Subtitle style ---
 SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Montserrat")
 SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "80"))
+
+# --- Multi-speaker (v0.2) ---
+# Diarization is OPTIONAL and heavy (torch). Enable only if you have a
+# HuggingFace token that accepted the pyannote terms AND enough RAM.
+MULTI_SPEAKER: bool = os.environ.get("CLIPPER_MULTI_SPEAKER", "") in ("1", "true", "yes", "on")
+HUGGINGFACE_TOKEN: str = os.environ.get("HUGGINGFACE_TOKEN", "")
+
+# Layout template used per clip: "single" (follow active speaker) or "duo"
+# (split-screen, two speakers). Empty = auto (decided by diarization).
+LAYOUT_MODE: str = os.environ.get("CLIPPER_LAYOUT_MODE", "auto")
