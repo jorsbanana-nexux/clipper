@@ -1,0 +1,124 @@
+> [!WARNING]
+> ## ⚠️ STATUS: TAHAP PENGEMBANGAN AKTIF — HARAP BERHATI-HATI
+> Proyek ini **belum stabil dan masih dalam pengembangan aktif**. API, struktur
+> folder, dan perilaku dapat berubah tanpa pemberitahuan. **Jangan gunakan di
+> produksi** sebelum mencapai rilis `v1.0`. Baca [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)
+> untuk roadmap & status fitur terbaru.
+
+---
+
+# CLIPPER <span style="color:#ff5c1f">.</span>
+
+**AI web clipper** — tempel link video, AI menganalisis momen viral, memotong hanya
+bagian terbaik, lalu membingkai ulang ke **9:16** dengan **subtitle word-by-word**
+(gaya Alex Hormozi) + **face tracking**, siap diunduh dan diunggah ke TikTok / Reels / Shorts.
+
+> "Bukan sekadar clipper otonom yang kaku — tapi editor profesional."
+
+---
+
+## 🧠 Konsep Inti
+
+Terbagi menjadi **2 mode**:
+
+| Mode | Nama | Status | Deskripsi |
+|------|------|--------|-----------|
+| 1 | **Podcast** | 🟢 *in progress* | Tempel URL → AI temukan momen viral → potong segmen terpilih → clip 9:16 face-tracked + subtitle word-by-word |
+| 2 | **Keyword** | 🔴 *coming soon* | 1 kata kunci → clipper (TTS + template) — **belum dikerjakan** |
+
+---
+
+## ⚙️ Cara Kerja (Mode 1 — Podcast)
+
+```
+tempel URL ──► unduh AUDIO saja (ringan) ──► Whisper transkrip (word timestamps)
+     ──► GPT analisis momen viral (6–10 klip) ──► unduh HANYA segmen terpilih
+     ──► face-track & reframe 9:16 ──► subtitle word-by-word ──► efek ──► library unduh
+```
+
+**Fitur utama:**
+- **Analisis dulu, download kemudian** — AI menonton transkrip, menemukan momen
+  (mis. menit `01:20–02:34`), lalu hanya segmen itu yang diunduh → hemat bandwith & waktu.
+- **Face tracking nyata** (MediaPipe + OpenCV Haar fallback) — bingkai 9:16 mengikuti wajah pembicara.
+- **Subtitle word-by-word** — font tebal (Montserrat/Bebas Neue), highlight per kata, margin aman.
+- **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
+- **Efek viral** — kontras + saturasi + sharpen ringan.
+- **Deteksi bahasa otomatis** — Whisper auto-detect semua bahasa.
+
+---
+
+## 📁 Struktur Proyek
+
+```
+clipper/
+├── backend/                 # FastAPI (Python 3.11)
+│   ├── app/
+│   │   ├── main.py          # App entry + routing
+│   │   ├── config.py        # Konfigurasi (env vars)
+│   │   ├── models.py        # Pydantic models
+│   │   ├── jobs.py          # Job manager + pipeline async
+│   │   ├── downloader.py    # yt-dlp (audio + segment ranges)
+│   │   ├── transcriber.py   # Whisper word timestamps
+│   │   ├── analyzer.py      # GPT viral-moment detection
+│   │   ├── face_tracker.py  # MediaPipe face tracking + reframe
+│   │   ├── subtitles.py     # ASS word-by-word
+│   │   └── renderer.py      # ffmpeg clip + efek + thumbnail
+│   └── run.py               # Launcher
+├── frontend/                # Next.js 15 (App Router)
+│   └── app/page.tsx         # Paste URL → progress → library unduh
+├── docs/
+│   └── REQUIREMENTS.md      # Spesifikasi, arsitektur, roadmap
+└── requirements.txt         # Dependensi Python
+```
+
+---
+
+## 🚀 Menjalankan Secara Lokal
+
+### Prasyarat
+- **Python 3.11** dan **ffmpeg** terpasang (`ffmpeg -version`).
+- **Node.js 18+** untuk frontend.
+- **`OPENAI_API_KEY`** (untuk Whisper + GPT analisis).
+
+### 1. Backend
+
+```bash
+cd clipper
+pip install -r requirements.txt
+export OPENAI_API_KEY="sk-..."
+python backend/run.py
+# → http://localhost:8000  (health: /health)
+```
+
+### 2. Frontend
+
+```bash
+cd clipper/frontend
+npm install
+BACKEND_URL=http://localhost:8000 npm run dev
+# → http://localhost:3000
+```
+
+---
+
+## 🔌 API
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `POST` | `/jobs` | Buat job: `{url, max_clips, mode}` |
+| `GET`  | `/jobs/{id}` | Status job + progress + daftar clip |
+| `GET`  | `/health` | Health check |
+| `GET`  | `/clips/...` | File clip & thumbnail (static) |
+
+---
+
+## 📌 Status & Roadmap
+
+Lihat [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) untuk detail lengkap.
+Ringkas:
+
+- [x] **v0.1** — Backend pipeline (download → transkrip → analisis → clip → reframe → subtitle → efek)
+- [x] **v0.1** — Frontend (paste URL, progress, library unduh)
+- [ ] **v0.2** — Multi-speaker split-screen + dynamic speaker switching
+- [ ] **v0.3** — TikTok/Instagram download hardening, caption IG/TikTok
+- [ ] **v1.0** — Mode 2 (Keyword), autentikasi, Redis state, produksi
