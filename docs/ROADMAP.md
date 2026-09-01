@@ -235,10 +235,10 @@ Membuat sistem tahan restart dan terukur.
 
 ## 6b. Launcher Windows (launcher.bat)
 
-- **`launcher.bat`** = smart launcher idempotent: deteksi Python/ffmpeg/Node/npm,
-  install hanya jika hilang (via `winget` bila ada, TANPA aksi berisiko), buat `.venv`,
-  install deps, set `OPENAI_API_KEY` ke `.env`, lalu launch backend+frontend + buka
-  browser. Jika semua sudah ada → hanya verifikasi cepat lalu langsung jalan.
+- **`launcher.bat`** = set `OPENAI_API_KEY` + `HUGGINGFACE_TOKEN` (Enter = OFF) ke
+  `.env`, lalu buka browser. Environment (Python/ffmpeg/Node/deps) diasumsikan sudah
+  terpasang manual (pengguna menjalankan setup manual). Semua SET key/token TIDAK boleh
+  di chat — hanya lewat `launcher.bat` (atau edit `.env` langsung).
 
 ## 7. Cara melanjutkan (mulai dari mana)
 
