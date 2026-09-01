@@ -21,6 +21,12 @@ class HighlightAnalysis(BaseModel):
     highlights: list[ViralMoment] = Field(..., min_length=1, max_length=15)
 
 
+class SpeakerTurn(BaseModel):
+    speaker: str = Field(..., description="Speaker label (e.g. SPEAKER_00)")
+    start: float = Field(..., description="Start time in seconds")
+    end: float = Field(..., description="End time in seconds")
+
+
 class Word(BaseModel):
     word: str
     start: float
