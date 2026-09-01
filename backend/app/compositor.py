@@ -5,6 +5,7 @@ Video-only segments are rendered per timeline window, normalised to a canonical
 9:16 stream, then concatenated with `xfade`. The original clip audio is muxed
 back at the end — so audio stays perfectly in sync regardless of layout changes.
 """
+import os
 import shutil
 import subprocess
 
