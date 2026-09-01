@@ -139,11 +139,15 @@ async def _run_pipeline(job: Job, request) -> None:
             turns: list[dict] = []
             if diarization.diarization_available():
                 try:
+                    # aseg is the short clip audio (captions path, 0-bound timestamps).
+                    # raw_path is the padded video segment — always present. Convert the
+                    # segment to 16 kHz mono WAV before diarization. Only operate on the
+                    # short per-clip segment so it stays light.
                     if aseg:
                         diar_audio = aseg
                     else:
                         diar_audio = str(seg_dir / "diar_audio.wav")
-                        await asyncio.to_thread(renderer.cut_audio, audio_path, padded_start, padded_end, diar_audio)
+                        await asyncio.to_thread(renderer.cut_audio, raw_path, 0.0, padded_end - padded_start, diar_audio)
                     turns = await asyncio.to_thread(diarization.diarize, diar_audio)
                 except Exception:
                     turns = []
