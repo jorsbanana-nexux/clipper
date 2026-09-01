@@ -98,24 +98,21 @@ detection, crop-follow 9:16 mux audio, parser VTT/SRT, ASS word-by-word, auto-ch
 
 Mengamankan fondasi sebelum nambah fitur.
 
-- [x] **A0 — Uji end-to-end** (paling penting, pertama). Jalankan di IP rumahan pengguna
-      dengan `OPENAI_API_KEY` asli. Uji dengan 1 video pendek (1–3 menit) dulu, lalu 1 podcast
-      panjang (30–60 menit). Catat semua error, perbaiki sampai jalur captions & fallback sama-sama OK.
-- [x] **A1 — Potongan frame-accurate.** Tambah opsi di `renderer.clip_segment`: mode re-encode
-      (`-ss` sebelum `-i`, tanpa `-c copy`) sebagai pilihan "akurat" vs mode "cepat". Bisa jadi
-      konfig `CLIPPER_CUT_MODE=fast|accurate`.
-- [x] **A2 — Bundle font.** Taruh `assets/fonts/Montserrat-ExtraBold.ttf` (atau Bebas Neue) ke repo,
-      set `fontsdir` di header ASS, dan fallback ke font sistem. Ini menjamin subtitle konsisten.
-- [x] **A3 — Verifikasi A/V & sinkron.** Setelah render, `ffprobe` output: pastikan ada stream
-      video + audio, durasi mendekati `padded_end - padded_start`. Kalau tidak, retry 1× lalu flag.
-- [x] **A4 — Auto-detect bahasa.** Captions-first: ambil caption bahasa asli dulu (bukan paksa "en"),
-      gunakan `language` dari metadata; kalau tidak ada, Whisper auto-detect.
-- [x] **A5 — yt-dlp tangguh.** Dukung `--cookies-from-browser`/file cookies (dari env path, BUKAN
-      chat), proxy opsional, retry + backoff, dan rantai format fallback.
-- [x] **A6 — Batasi konkurensi.** Karena PC pengguna low-spec, proses clip **berurutan** (default).
-      Tambah konfig `CLIPPER_MAX_PARALLEL=1..3` bila suatu saat ingin paralel.
-- [x] **A7 — Cleanup & retention.** Hapus folder job lama setelah N hari (env `CLIPPER_RETENTION_DAYS`,
-      default 7), dan jangan simpan file antara (`full.*`, `aseg.*`, `vertical.mp4`) setelah selesai.
+- [ ] **A0 — Uji end-to-end** ⏳ *checklist, belum dijalankan* — lihat `docs/TESTING.md`. Harus
+      dijalankan di IP rumahan dengan `OPENAI_API_KEY` asli (sandbox tidak bisa: YouTube blokir IP
+      datacenter). Mulai dari 1 video pendek (1–3 menit), lalu 1 podcast panjang (30–60 menit).
+- [x] **A1 — Potongan frame-accurate.** ✅ Tambah opsi `CLIPPER_CUT_MODE=fast|accurate` di
+      `renderer.clip_segment` (accurate = re-encode `-ss` sebelum `-i`; default).
+- [x] **A2 — Bundle font.** ✅ `subtitles.py` mendukung `CLIPPER_FONT_DIR` -> `fontsdir` ASS +
+      resolve nama font vs file `.ttf/.otf`, fallback font sistem.
+- [x] **A3 — Verifikasi A/V & sinkron.** ✅ `renderer.verify_output` (ffprobe: cek stream video +
+      audio + durasi), dipanggil setelah render tiap clip.
+- [x] **A4 — Auto-detect bahasa.** ✅ `fetch_captions` kini native-first (bukan English-first) dan
+      mengembalikan `(segments, lang)`; `lang` diteruskan sebagai hint ke Whisper.
+- [x] **A5 — yt-dlp tangguh.** ✅ `YDL_COOKIES_FILE` (path, jangan tempel di chat), `YDL_PROXY`,
+      `YDL_RETRIES` (default 3), retry + fallback format.
+- [x] **A6 — Batasi konkurensi.** ✅ `CLIPPER_MAX_PARALLEL=1` default (sequential, low-spec friendly).
+- [x] **A7 — Cleanup & retention.** ✅ `_cleanup_old_jobs` + `CLIPPER_RETENTION_DAYS` (default 7).
 
 ---
 
