@@ -15,6 +15,8 @@ class ViralMoment(BaseModel):
     reason: str = Field(..., description="Why this moment is engaging / viral-worthy")
     viral_score: int = Field(..., ge=1, le=10, description="Viral potential score 1-10")
     hook: str = Field(..., description="One-line hook for the caption")
+    speaker: str = Field("", description="Primary speaker label (empty if no diarization)")
+    speakers: list[str] = Field(default_factory=list, description="All speaker labels active in this moment")
 
 
 class HighlightAnalysis(BaseModel):
