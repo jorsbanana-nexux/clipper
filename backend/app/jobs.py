@@ -66,6 +66,8 @@ async def _run_pipeline(job: Job, request) -> None:
         full_words: list[dict] = []
         analysis_segments: list[dict] = []
         transcript_text: str = ""
+        duration: float = 0.0
+        audio_path: str | None = None
 
         if used_captions:
             transcript_text = " ".join(s.get("text", "") for s in caption_segments)
@@ -76,6 +78,7 @@ async def _run_pipeline(job: Job, request) -> None:
             job.update(stage="download_audio", message="No captions — downloading audio...")
             audio_path, info = await asyncio.to_thread(downloader.download_audio_only, request.url, str(work_dir))
             title = (info or {}).get("title", "Untitled")
+            duration = float((info or {}).get("duration") or 0.0)
             job.update(stage="transcribe", progress=0.2,
                        message="Transcribing speech (word-level)...")
             transcript = await asyncio.to_thread(transcriber.transcribe, audio_path)
@@ -90,7 +93,7 @@ async def _run_pipeline(job: Job, request) -> None:
         # speaker-aware. On the captions path we may not have the full audio yet,
         # so diarization is skipped there (turns = []).
         analysis_turns: list[dict] = []
-        if diarization.diarization_available() and not used_captions:
+        if diarization.diarization_available() and not used_captions and audio_path:
             try:
                 full_audio = str(work_dir / "diar_full.wav")
                 await asyncio.to_thread(renderer.cut_audio, audio_path, 0.0, duration, full_audio)
