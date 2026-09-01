@@ -64,6 +64,7 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 |-------|--------|
 | Auto-reframe 9:16 + pelacakan wajah aktif (ikuti pembicara) | ✅ v0.1 |
 | Multi-face detection + split-screen duo (2 pembicara) | ✅ v0.2 |
+| Split kiri/kanan untuk 2 pembicara berdampingan | ✅ v0.2 (`reframe_duo two_halves=True`) |
 | Speaker diarization (siapa bicara kapan) — opsional (pyannote, gated HF token) | ✅ v0.2 (opsional) |
 | Dynamic speaker switching halus dalam satu clip (single ↔ duo, crossfade) | ✅ v0.2 (`compositor.py`) |
 
