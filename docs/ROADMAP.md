@@ -235,10 +235,9 @@ Membuat sistem tahan restart dan terukur.
 
 ## 6b. Launcher Windows (launcher.bat)
 
-- **`launcher.bat`** = set `OPENAI_API_KEY` + `HUGGINGFACE_TOKEN` (Enter = OFF) ke
-  `.env`, lalu buka browser. Environment (Python/ffmpeg/Node/deps) diasumsikan sudah
-  terpasang manual (pengguna menjalankan setup manual). Semua SET key/token TIDAK boleh
-  di chat — hanya lewat `launcher.bat` (atau edit `.env` langsung).
+- **`launcher.bat`** = set key/token → simpan `.env` → `pip install -r requirements.txt`
+  (sinkronisasi deps termasuk `python-dotenv`) → start backend + frontend di jendela
+  terpisah → buka browser. Key/token TIDAK boleh di chat — pakai launcher atau edit `.env`.
 
 ## 7. Cara melanjutkan (mulai dari mana)
 
