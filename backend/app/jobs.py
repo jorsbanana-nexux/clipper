@@ -103,30 +103,35 @@ async def _run_pipeline(job: Job, request) -> None:
             job.update(status="rendering", stage=f"render_{i+1}", progress=frac,
                        message=f"Rendering clip {i+1}/{total}: {hl.title}")
 
+            # Pad the moment so it's never cut off even if timestamps drift ~1-2s.
+            pad = config.PADDING_SEC
+            padded_start = max(0.0, hl.start_time - pad)
+            padded_end = hl.end_time + pad
+
             seg_dir = work_dir / f"clip_{i+1}"
             seg_dir.mkdir(exist_ok=True)
 
-            # download only this video segment
+            # download only this (padded) video segment
             raw_path = await asyncio.to_thread(
-                downloader.download_segment, request.url, hl.start_time, hl.end_time, str(seg_dir))
+                downloader.download_segment, request.url, padded_start, padded_end, str(seg_dir))
 
             # words for this clip:
-            #   captions path -> download only this audio segment + Whisper (accurate word timing)
+            #   captions path -> download only this (padded) audio segment + Whisper (accurate word timing)
             #   fallback path -> reuse full-transcript words (already have them)
             local_words: list[dict] = []
             if used_captions:
                 try:
                     aseg = await asyncio.to_thread(
-                        downloader.download_audio_segment, request.url, hl.start_time, hl.end_time, str(seg_dir))
+                        downloader.download_audio_segment, request.url, padded_start, padded_end, str(seg_dir))
                     t = await asyncio.to_thread(transcriber.transcribe, aseg)
                     local_words = transcriber.words_from_transcript(t)
                 except Exception as e:
                     job.update(message=f"clip {i+1}: audio segment Whisper failed ({e}); subtitle skipped")
             else:
                 local_words = [
-                    {**w, "start": w["start"] - hl.start_time, "end": w["end"] - hl.start_time}
+                    {**w, "start": w["start"] - padded_start, "end": w["end"] - padded_start}
                     for w in full_words
-                    if w["end"] >= hl.start_time and w["start"] <= hl.end_time
+                    if w["end"] >= padded_start and w["start"] <= padded_end
                 ]
 
             # face-track reframe to 9:16
