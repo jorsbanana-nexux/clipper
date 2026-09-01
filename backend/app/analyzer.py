@@ -1,4 +1,9 @@
-"""Viral-moment detection: GPT analyses the transcript and picks the best clips."""
+"""Viral-moment detection: GPT analyses the transcript and picks the best clips.
+
+B2 (v0.2): when speaker turns (diarization) are provided, they are injected into
+the prompt so the model can (a) prefer two-person exchanges and (b) return which
+speaker(s) are active in each moment. This feeds dynamic layout selection.
+"""
 from textwrap import dedent
 
 from openai import OpenAI
@@ -16,9 +21,22 @@ def _format_segments(segments: list[dict], limit: int = 200) -> str:
     return "\n".join(lines)
 
 
-def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur) -> HighlightAnalysis:
+def _format_turns(turns: list[dict], limit: int = 300) -> str:
+    lines = []
+    for t in (turns or [])[:limit]:
+        spk = t.get("speaker", "SPEAKER_?")
+        start = t.get("start", 0.0)
+        end = t.get("end", 0.0)
+        lines.append(f"[{start:7.2f}-{end:7.2f}] {spk}")
+    return "\n".join(lines)
+
+
+def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur, turns=None) -> HighlightAnalysis:
     if not config.OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not set. Provide it via environment.")
+
+    has_turns = bool(turns)
+    turns_block = _format_turns(turns) if has_turns else "(no speaker diarization available)"
 
     prompt = dedent("""
         You are an elite short-form video editor. Given a podcast transcript with
@@ -33,9 +51,31 @@ def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur) -
         - Avoid overlaps between clips.
         - Return them ranked by viral potential (best first).
 
+        {speaker_instruction}
+
         Transcript segments (start time in seconds, then text):
         {segments}
-    """).format(max_clips=max_clips, min_dur=int(min_dur), max_dur=int(max_dur), segments=_format_segments(segments))
+
+        Speaker turns (start-end, then label):
+        {turns}
+    """).format(
+        max_clips=max_clips,
+        min_dur=int(min_dur),
+        max_dur=int(max_dur),
+        segments=_format_segments(segments),
+        turns=turns_block,
+        speaker_instruction=(
+            "Speaker diarization IS available. For each viral moment, fill the
+"
+            "        'speaker' field with the PRIMARY speaker label and 'speakers' with ALL
+"
+            "        labels active in that window. Prefer moments where two speakers exchange
+"
+            "        (disagreement, interruption, rapid back-and-forth) — those tend to go viral."
+            if has_turns else
+            "Speaker diarization is NOT available. Leave 'speaker' empty and 'speakers' empty."
+        ),
+    )
 
     client = OpenAI(api_key=config.OPENAI_API_KEY)
     resp = client.beta.chat.completions.parse(
