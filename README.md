@@ -87,10 +87,9 @@ clipper/
 
 ## 🚀 Menjalankan Secara Lokal
 
-> **Windows satu-klik:** pakai [`launcher.bat`](launcher.bat) — deteksi & install
-> Python/ffmpeg/Node (via winget bila ada), buat `.venv`, install deps Python+npm,
-> set `OPENAI_API_KEY`, lalu jalankan backend + frontend dan buka browser otomatis.
-> Aman & idempotent (jika sudah terpasang, hanya verifikasi cepat lalu langsung jalan).
+> **Windows satu-klik:** [`launcher.bat`](launcher.bat) = set `OPENAI_API_KEY` +
+> `HUGGINGFACE_TOKEN` (Enter kosong = OFF) ke `.env`, lalu buka browser. Environment
+> (Python/ffmpeg/Node/deps) diasumsikan sudah terpasang manual.
 
 
 
