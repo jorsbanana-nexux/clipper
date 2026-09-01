@@ -52,6 +52,26 @@ class JobManager:
 manager = JobManager()
 
 
+def _cleanup_old_jobs() -> None:
+    """A7: delete job output folders older than config.RETENTION_DAYS."""
+    import time
+    retention = getattr(config, "RETENTION_DAYS", 7)
+    if retention <= 0:
+        return
+    now = time.time()
+    cutoff = retention * 86400
+    out = config.OUTPUT_DIR
+    if not out.exists():
+        return
+    for p in out.iterdir():
+        if p.is_dir():
+            try:
+                if now - p.stat().st_mtime > cutoff:
+                    shutil.rmtree(p, ignore_errors=True)
+            except OSError:
+                continue
+
+
 async def _run_pipeline(job: Job, request) -> None:
     work_dir = config.OUTPUT_DIR / job.job_id
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -59,7 +79,7 @@ async def _run_pipeline(job: Job, request) -> None:
         # ---- 1. transcript: captions-first (no audio) -> fallback full audio ----
         job.update(status="downloading", stage="transcript", progress=0.05,
                    message="Fetching transcript (captions-first)...")
-        caption_segments = await asyncio.to_thread(downloader.fetch_captions, request.url)
+        caption_segments, caption_lang = await asyncio.to_thread(downloader.fetch_captions, request.url)
 
         title = "Untitled"
         used_captions = bool(caption_segments)
@@ -138,7 +158,7 @@ async def _run_pipeline(job: Job, request) -> None:
                 try:
                     aseg = await asyncio.to_thread(
                         downloader.download_audio_segment, request.url, padded_start, padded_end, str(seg_dir))
-                    t = await asyncio.to_thread(transcriber.transcribe, aseg)
+                    t = await asyncio.to_thread(transcriber.transcribe, aseg, caption_lang)
                     local_words = transcriber.words_from_transcript(t)
                 except Exception as e:
                     job.update(message=f"clip {i+1}: audio segment Whisper failed ({e}); subtitle skipped")
@@ -201,6 +221,9 @@ async def _run_pipeline(job: Job, request) -> None:
             else:
                 shutil.copy(vertical, final)
 
+            # A3: verify A/V + duration before declaring the clip ready
+            await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
+
             thumb = str(seg_dir / "thumb.jpg")
             await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
 
@@ -220,6 +243,7 @@ async def _run_pipeline(job: Job, request) -> None:
 
         job.update(status="done", stage="done", progress=1.0,
                    message=f"Ready: {len(clips)} clips", clips=clips)
+        _cleanup_old_jobs()
 
     except Exception as e:
         job.update(status="error", stage="error", error=str(e), message=str(e))
