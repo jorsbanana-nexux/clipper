@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-01
+**Terakhir diperbarui:** 2026-09-01 (v0.2 multi-speaker)
 
 ---
 
@@ -42,7 +42,7 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 | 2 | Analisis momen viral | `analyzer.py` (GPT) | 6–10 `ViralMoment` |
 | 3 | Unduh segmen video terpilih (+ padding 1,5 detik) | `downloader.download_segment` | video rentang saja |
 | 4 | Whisper HANYA segmen audio terpilih (+ padding) | `downloader.download_audio_segment` + `transcriber` | word timestamps |
-| 5 | Face track + reframe 9:16 | `face_tracker.py` | `vertical.mp4` |
+| 5 | Face track + reframe 9:16 (single / duo split-screen) | `face_tracker.py` + `layout.py` | `vertical.mp4` |
 | 6 | Subtitle word-by-word | `subtitles.py` + `renderer.py` | `final.mp4` |
 | 7 | Library unduh | `jobs.py` + frontend | daftar clip |
 
@@ -62,9 +62,14 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 
 | Fitur | Status |
 |-------|--------|
-| Auto-reframe 9:16 + pelacakan wajah aktif (ikuti pembicara) | ✅ v0.1 (single-speaker) |
-| Auto dual-speaker saat wawancara multi-orang | ⬜ v0.2 |
-| Dynamic speaker switching (webcam ↔ screen share) | ⬜ v0.2 |
+| Auto-reframe 9:16 + pelacakan wajah aktif (ikuti pembicara) | ✅ v0.1 |
+| Multi-face detection + split-screen duo (2 pembicara) | ✅ v0.2 |
+| Speaker diarization (siapa bicara kapan) — opsional (pyannote, gated HF token) | ✅ v0.2 (opsional) |
+| Dynamic speaker switching halus dalam satu clip (webcam ↔ screen share) | ⬜ v0.2.1 (B5, timeline sudah ada) |
+
+> **Catatan multi-speaker:** diarization bersifat **opsional** (`CLIPPER_MULTI_SPEAKER=1` +
+> `HUGGINGFACE_TOKEN`) karena menarik `torch` (berat untuk PC low-spec). Tanpa itu, pipeline
+> otomatis fallback ke single-speaker — tidak crash. Template layout: `single`, `duo` (`layout.py`).
 
 ### 3.5 Kualitas video
 - 720p/1080p, **no blur** (`bestvideo[height<=1080]`).
