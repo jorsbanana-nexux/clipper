@@ -40,8 +40,8 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 |---|-------|----------|--------|
 | 1 | Ambil transkrip dari captions (0 MB audio) | `downloader.fetch_captions` | segmen `{start,end,text}` |
 | 2 | Analisis momen viral | `analyzer.py` (GPT) | 6–10 `ViralMoment` |
-| 3 | Unduh segmen video terpilih | `downloader.download_segment` | video rentang saja |
-| 4 | Whisper HANYA segmen audio terpilih | `downloader.download_audio_segment` + `transcriber` | word timestamps |
+| 3 | Unduh segmen video terpilih (+ padding 1,5 detik) | `downloader.download_segment` | video rentang saja |
+| 4 | Whisper HANYA segmen audio terpilih (+ padding) | `downloader.download_audio_segment` + `transcriber` | word timestamps |
 | 5 | Face track + reframe 9:16 | `face_tracker.py` | `vertical.mp4` |
 | 6 | Subtitle word-by-word | `subtitles.py` + `renderer.py` | `final.mp4` |
 | 7 | Library unduh | `jobs.py` + frontend | daftar clip |
@@ -156,6 +156,9 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
   batas 25 MB file audio OpenAI Whisper untuk podcast panjang.
 - **Audio vs video**: audio ringan (~57 MB/jam), video berat (~0.6–1.5 GB/jam) — itulah
   kenapa penghematan difokuskan ke unduhan video (hanya segmen terpilih).
+- **Padding 1,5 detik** (`CLIPPER_PADDING_SEC`): setiap segmen dipotong sedikit lebih lebar
+  (1,5 detik sebelum & sesudah momen) agar momen tidak pernah terpotong walau timestamp
+  Whisper meleset 1–2 detik. Tetap pakai `-c copy` (cepat & ringan).
 - **Auto-provision key**: `OPENAI_API_KEY` harus diset pengguna (deploy sendiri).
 - **YouTube memblokir IP datacenter** — uji end-to-end harus dari IP rumahan pengguna,
   bukan dari sandbox server.
