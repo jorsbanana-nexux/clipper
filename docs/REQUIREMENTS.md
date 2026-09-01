@@ -26,6 +26,10 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 
 **Mode 2 TIDAK dikerjakan dulu.** Fokus penuh ke Mode 1.
 
+> **Fase A (hardening) selesai**: cut mode accurate/fast (A1), bundle font (A2),
+> verifikasi A/V+durasi (A3), auto-deteksi bahasa native (A4), yt-dlp tangguh (A5),
+> sequential default (A6), cleanup+retention (A7). Uji end-to-end: `docs/TESTING.md`.
+
 ---
 
 ## 3. Mode 1 — Spesifikasi Detail
