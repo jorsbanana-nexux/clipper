@@ -1,12 +1,17 @@
 """Video download and segment extraction via yt-dlp.
 
 Strategy (matches the "download only selected parts" requirement):
-1. download_audio_only  -> pull just the audio track + metadata (light).
-2. download_segment     -> pull ONLY a time range of the video for each clip.
+1. fetch_captions        -> transcript from YouTube captions (0 audio download).
+2. download_audio_only   -> full audio track (fallback when no captions).
+3. download_segment      -> only a time range of the VIDEO for each clip.
+4. download_audio_segment-> only a time range of the AUDIO (per-clip Whisper).
 """
+import html
 import os
+import re
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 
 import yt_dlp
@@ -86,5 +91,116 @@ def download_full_and_cut(url: str, start: float, end: float, out_dir: str) -> s
     subprocess.run([
         FFMPEG, "-ss", str(start), "-t", str(dur), "-i", str(full),
         "-c", "copy", "-avoid_negative_ts", "make_zero", "-y", cut,
+    ], check=True, capture_output=True)
+    return cut
+
+
+
+# ---- captions (no audio download) ----
+
+def _parse_ts(ts: str) -> float:
+    parts = ts.strip().split(":")
+    if len(parts) == 3:
+        h, m, s = parts
+        return int(h) * 3600 + int(m) * 60 + float(s.replace(",", "."))
+    m, s = parts
+    return int(m) * 60 + float(s.replace(",", "."))
+
+
+def _strip_tags(text: str) -> str:
+    text = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(text).strip()
+
+
+def _parse_vtt_srt(content: str) -> list[dict]:
+    ts_re = re.compile(r"(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})")
+    segments = []
+    lines = content.splitlines()
+    i = 0
+    while i < len(lines):
+        m = ts_re.search(lines[i])
+        if m:
+            start = _parse_ts(m.group(1))
+            end = _parse_ts(m.group(2))
+            i += 1
+            texts = []
+            while i < len(lines) and lines[i].strip() and not ts_re.search(lines[i]):
+                t = _strip_tags(lines[i])
+                if t:
+                    texts.append(t)
+                i += 1
+            text = " ".join(texts)
+            if text:
+                segments.append({"start": start, "end": end, "text": text})
+        else:
+            i += 1
+    return segments
+
+
+def fetch_captions(url: str) -> list[dict] | None:
+    '''Return [{start,end,text}] from YouTube captions (0 audio download), or None.'''
+    try:
+        with yt_dlp.YoutubeDL(_quiet_opts({"skip_download": True})) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception:
+        return None
+
+    for group_key in ("subtitles", "automatic_captions"):
+        subs = info.get(group_key) or {}
+        langs = [l for l in subs if l.lower().startswith("en")] + [l for l in subs if not l.lower().startswith("en")]
+        for lang in langs:
+            for entry in subs.get(lang, []):
+                if entry.get("ext") not in ("vtt", "srt"):
+                    continue
+                sub_url = entry.get("url")
+                if not sub_url:
+                    continue
+                try:
+                    with urllib.request.urlopen(sub_url, timeout=30) as r:
+                        content = r.read().decode("utf-8", errors="replace")
+                    segs = _parse_vtt_srt(content)
+                    if segs:
+                        return segs
+                except Exception:
+                    continue
+    return None
+
+
+def download_audio_segment(url: str, start: float, end: float, out_dir: str) -> str:
+    '''Download ONLY [start,end] of the audio (for per-clip Whisper subtitles).'''
+    os.makedirs(out_dir, exist_ok=True)
+    outtmpl = os.path.join(out_dir, "aseg.%(ext)s")
+    try:
+        opts = _quiet_opts({
+            "format": "bestaudio/best",
+            "outtmpl": outtmpl,
+            "download_ranges": _range_callback(start, end),
+            "force_keyframes_at_cuts": True,
+        })
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+        segs = [p for p in Path(out_dir).glob("aseg.*")]
+        if segs:
+            return str(segs[0])
+        raise RuntimeError("audio range download produced no file")
+    except Exception:
+        return download_full_audio_and_cut(url, start, end, out_dir)
+
+
+def download_full_audio_and_cut(url: str, start: float, end: float, out_dir: str) -> str:
+    os.makedirs(out_dir, exist_ok=True)
+    outtmpl = os.path.join(out_dir, "afull.%(ext)s")
+    opts = _quiet_opts({
+        "format": "bestaudio/best",
+        "outtmpl": outtmpl,
+    })
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        ydl.download([url])
+    full = [p for p in Path(out_dir).glob("afull.*")][0]
+    cut = os.path.join(out_dir, f"acut{full.suffix}")
+    dur = end - start
+    subprocess.run([
+        FFMPEG, "-ss", str(start), "-t", str(dur), "-i", str(full),
+        "-c", "copy", "-y", cut,
     ], check=True, capture_output=True)
     return cut
