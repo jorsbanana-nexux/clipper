@@ -130,7 +130,7 @@ Roadmap detail & prioritas lengkap (untuk agent masa depan) ada di
 | Fase | Fokus | Status |
 |------|-------|--------|
 | A | Akurasi & hardening dasar (uji end-to-end, frame-accurate, font, bahasa) | ⬜ P0 |
-| B | Multi-speaker split-screen + dynamic speaker switching | 🟡 v0.2 (diarization opsional; dynamic-switch in-clip = B5 tersisa) |
+| B | Multi-speaker split-screen + dynamic speaker switching | ✅ v0.2 (diarization, multi-face, split-screen, dynamic switch) |
 | C | Subtitle & efek profesional | ⬜ P1 |
 | D | Platform (TikTok/IG/X) & pengunduhan | ⬜ P1 |
 | E | State, storage, observability | ⬜ P1 |
