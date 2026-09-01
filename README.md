@@ -54,6 +54,7 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Efek viral** — kontras + saturasi + sharpen ringan.
 - **Padding 1,5 detik** — tiap clip dipotong sedikit lebih lebar agar momen selalu utuh (anti-terpotong).
 - **Auto-chunk 25 MiB** — audio panjang >25 MB otomatis dipecah agar lolos batas Whisper (podcast panjang aman).
+- **Fase A hardening** — cut akurat, bundle font, verifikasi output, auto-detect bahasa, yt-dlp tangguh, cleanup. Checklist uji: [`docs/TESTING.md`](docs/TESTING.md).
 - **Deteksi bahasa otomatis** — Whisper auto-detect semua bahasa.
 
 ---
@@ -130,7 +131,7 @@ Roadmap detail & prioritas lengkap (untuk agent masa depan) ada di
 
 | Fase | Fokus | Status |
 |------|-------|--------|
-| A | Akurasi & hardening dasar (uji end-to-end, frame-accurate, font, bahasa) | ⬜ P0 |
+| A | Akurasi & hardening dasar (uji end-to-end, frame-accurate, font, bahasa) | ✅ v0.1.x (A1–A7; A0 = checklist docs/TESTING.md) |
 | B | Multi-speaker split-screen + dynamic speaker switching | ✅ v0.2 (diarization, multi-face, split-screen, dynamic switch) |
 | C | Subtitle & efek profesional | ⬜ P1 |
 | D | Platform (TikTok/IG/X) & pengunduhan | ⬜ P1 |
