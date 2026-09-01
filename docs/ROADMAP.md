@@ -228,6 +228,14 @@ Membuat sistem tahan restart dan terukur.
 
 ---
 
+## 6a. Review mikroskopis reframe_duo (2026-09-01)
+
+- `reframe_duo` **selalu** crop kiri/kanan (cabang `two_halves` dihapus, menghilangkan
+  prilaku "vstack bingkai sama" yang salah untuk podcast side-by-side).
+- `_xcx_at` bebas dead-code + memiliki guard `b == a` (mencegah `ZeroDivisionError`).
+- Terverifikasi: sumber kiri-merah / kanan-biru → band atas MERAH, band bawah BIRU,
+  audio ikut tersalin. Semua 13 modul backend lolos `py_compile`.
+
 ## 7. Cara melanjutkan (mulai dari mana)
 
 1. Clone repo, `pip install -r requirements.txt`, set `OPENAI_API_KEY`.
