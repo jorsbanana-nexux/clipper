@@ -98,23 +98,23 @@ detection, crop-follow 9:16 mux audio, parser VTT/SRT, ASS word-by-word, auto-ch
 
 Mengamankan fondasi sebelum nambah fitur.
 
-- [ ] **A0 — Uji end-to-end** (paling penting, pertama). Jalankan di IP rumahan pengguna
+- [x] **A0 — Uji end-to-end** (paling penting, pertama). Jalankan di IP rumahan pengguna
       dengan `OPENAI_API_KEY` asli. Uji dengan 1 video pendek (1–3 menit) dulu, lalu 1 podcast
       panjang (30–60 menit). Catat semua error, perbaiki sampai jalur captions & fallback sama-sama OK.
-- [ ] **A1 — Potongan frame-accurate.** Tambah opsi di `renderer.clip_segment`: mode re-encode
+- [x] **A1 — Potongan frame-accurate.** Tambah opsi di `renderer.clip_segment`: mode re-encode
       (`-ss` sebelum `-i`, tanpa `-c copy`) sebagai pilihan "akurat" vs mode "cepat". Bisa jadi
       konfig `CLIPPER_CUT_MODE=fast|accurate`.
-- [ ] **A2 — Bundle font.** Taruh `assets/fonts/Montserrat-ExtraBold.ttf` (atau Bebas Neue) ke repo,
+- [x] **A2 — Bundle font.** Taruh `assets/fonts/Montserrat-ExtraBold.ttf` (atau Bebas Neue) ke repo,
       set `fontsdir` di header ASS, dan fallback ke font sistem. Ini menjamin subtitle konsisten.
-- [ ] **A3 — Verifikasi A/V & sinkron.** Setelah render, `ffprobe` output: pastikan ada stream
+- [x] **A3 — Verifikasi A/V & sinkron.** Setelah render, `ffprobe` output: pastikan ada stream
       video + audio, durasi mendekati `padded_end - padded_start`. Kalau tidak, retry 1× lalu flag.
-- [ ] **A4 — Auto-detect bahasa.** Captions-first: ambil caption bahasa asli dulu (bukan paksa "en"),
+- [x] **A4 — Auto-detect bahasa.** Captions-first: ambil caption bahasa asli dulu (bukan paksa "en"),
       gunakan `language` dari metadata; kalau tidak ada, Whisper auto-detect.
-- [ ] **A5 — yt-dlp tangguh.** Dukung `--cookies-from-browser`/file cookies (dari env path, BUKAN
+- [x] **A5 — yt-dlp tangguh.** Dukung `--cookies-from-browser`/file cookies (dari env path, BUKAN
       chat), proxy opsional, retry + backoff, dan rantai format fallback.
-- [ ] **A6 — Batasi konkurensi.** Karena PC pengguna low-spec, proses clip **berurutan** (default).
+- [x] **A6 — Batasi konkurensi.** Karena PC pengguna low-spec, proses clip **berurutan** (default).
       Tambah konfig `CLIPPER_MAX_PARALLEL=1..3` bila suatu saat ingin paralel.
-- [ ] **A7 — Cleanup & retention.** Hapus folder job lama setelah N hari (env `CLIPPER_RETENTION_DAYS`,
+- [x] **A7 — Cleanup & retention.** Hapus folder job lama setelah N hari (env `CLIPPER_RETENTION_DAYS`,
       default 7), dan jangan simpan file antara (`full.*`, `aseg.*`, `vertical.mp4`) setelah selesai.
 
 ---
