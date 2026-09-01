@@ -233,6 +233,13 @@ Membuat sistem tahan restart dan terukur.
 - Terverifikasi: sumber kiri-merah / kanan-biru → band atas MERAH, band bawah BIRU,
   audio ikut tersalin. Semua 13 modul backend lolos `py_compile`.
 
+## 6b. Launcher Windows (launcher.bat)
+
+- **`launcher.bat`** = smart launcher idempotent: deteksi Python/ffmpeg/Node/npm,
+  install hanya jika hilang (via `winget` bila ada, TANPA aksi berisiko), buat `.venv`,
+  install deps, set `OPENAI_API_KEY` ke `.env`, lalu launch backend+frontend + buka
+  browser. Jika semua sudah ada → hanya verifikasi cepat lalu langsung jalan.
+
 ## 7. Cara melanjutkan (mulai dari mana)
 
 1. Clone repo, `pip install -r requirements.txt`, set `OPENAI_API_KEY`.
