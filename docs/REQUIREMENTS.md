@@ -139,12 +139,21 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 
 ## 6. Roadmap
 
-| Versi | Fokus | Status |
-|-------|-------|--------|
-| v0.1 | Pipeline inti + frontend | ✅ done |
-| v0.2 | Multi-speaker, dynamic switching | ⬜ |
-| v0.3 | TikTok/IG hardening, caption IG/TikTok, efek lanjutan | ⬜ |
-| v1.0 | Mode 2 (Keyword), auth, Redis, produksi | ⬜ |
+Roadmap **lengkap & detail untuk agent masa depan** pindah ke
+[`docs/ROADMAP.md`](docs/ROADMAP.md) — berisi urutan fase prioritas (A→G),
+daftar gap/kekurangan, acceptance criteria, dan konvensi proyek. Hanya Mode 1 (Podcast).
+
+Ringkas fase Mode 1:
+
+| Fase | Fokus | Prioritas |
+|------|-------|-----------|
+| A | Akurasi & hardening dasar | P0 |
+| B | Multi-speaker split-screen + dynamic switching | P0 |
+| C | Subtitle & efek profesional | P1 |
+| D | Platform (TikTok/IG/X) & pengunduhan | P1 |
+| E | State, storage, observability | P1 |
+| F | Frontend UX | P1 |
+| G | Deployment, testing, keamanan | P2 |
 
 ---
 
