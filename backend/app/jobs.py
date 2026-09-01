@@ -1,5 +1,13 @@
 """In-process job manager: async pipeline execution with progress tracking.
 
+Pipeline strategy (light / low-resource friendly):
+1. Captions-first: try YouTube/auto captions -> transcript WITHOUT downloading audio.
+   (falls back to full-audio download + Whisper only when no captions exist)
+2. GPT analyses the transcript text -> picks viral moments.
+3. For each moment: download ONLY that video segment + (if captions path)
+   only that audio segment -> Whisper for word timestamps -> reframe 9:16
+   -> word-by-word subtitles -> effects.
+
 v1 keeps jobs in memory (single-process). Swapping the dict for Redis is a
 documented future step for horizontal scaling.
 """
@@ -48,31 +56,44 @@ async def _run_pipeline(job: Job, request) -> None:
     work_dir = config.OUTPUT_DIR / job.job_id
     work_dir.mkdir(parents=True, exist_ok=True)
     try:
-        # 1. audio-only download + metadata
-        job.update(status="downloading", stage="download_audio", progress=0.05,
-                   message="Downloading audio track...")
-        audio_path, info = await asyncio.to_thread(downloader.download_audio_only, request.url, str(work_dir))
-        title = (info or {}).get("title", "Untitled")
-        duration = float((info or {}).get("duration") or 0.0)
+        # ---- 1. transcript: captions-first (no audio) -> fallback full audio ----
+        job.update(status="downloading", stage="transcript", progress=0.05,
+                   message="Fetching transcript (captions-first)...")
+        caption_segments = await asyncio.to_thread(downloader.fetch_captions, request.url)
 
-        # 2. transcribe
-        job.update(status="transcribing", stage="transcribe", progress=0.2,
-                   message="Transcribing speech (word-level)...")
-        transcript = await asyncio.to_thread(transcriber.transcribe, audio_path)
-        words = transcriber.words_from_transcript(transcript)
-        segments = transcriber.segments_from_transcript(transcript)
+        title = "Untitled"
+        used_captions = bool(caption_segments)
+        full_words: list[dict] = []
+        analysis_segments: list[dict] = []
+        transcript_text: str = ""
 
-        # 3. analyze
+        if used_captions:
+            transcript_text = " ".join(s.get("text", "") for s in caption_segments)
+            analysis_segments = caption_segments
+            job.update(stage="transcript_captions", progress=0.2,
+                       message="Transcript ready (captions, no audio downloaded)")
+        else:
+            job.update(stage="download_audio", message="No captions — downloading audio...")
+            audio_path, info = await asyncio.to_thread(downloader.download_audio_only, request.url, str(work_dir))
+            title = (info or {}).get("title", "Untitled")
+            job.update(stage="transcribe", progress=0.2,
+                       message="Transcribing speech (word-level)...")
+            transcript = await asyncio.to_thread(transcriber.transcribe, audio_path)
+            transcript_text = transcript.get("text", "")
+            full_words = transcriber.words_from_transcript(transcript)
+            analysis_segments = transcriber.segments_from_transcript(transcript)
+
+        # ---- 2. analysis ----
         job.update(status="analyzing", stage="analyze", progress=0.35,
                    message="Finding viral moments...")
         analysis = await asyncio.to_thread(
             analyzer.find_viral_moments,
-            transcript.get("text", ""), segments, request.max_clips,
+            transcript_text, analysis_segments, request.max_clips,
             config.MIN_CLIP_SEC, config.MAX_CLIP_SEC,
         )
         highlights = analysis.highlights[:request.max_clips]
 
-        # 4. render each clip
+        # ---- 3. render each clip ----
         total = max(1, len(highlights))
         clips = []
         for i, hl in enumerate(highlights):
@@ -85,17 +106,35 @@ async def _run_pipeline(job: Job, request) -> None:
             seg_dir = work_dir / f"clip_{i+1}"
             seg_dir.mkdir(exist_ok=True)
 
-            # download only this segment (light) then cut
-            raw_path = await asyncio.to_thread(downloader.download_segment, request.url, hl.start_time, hl.end_time, str(seg_dir))
+            # download only this video segment
+            raw_path = await asyncio.to_thread(
+                downloader.download_segment, request.url, hl.start_time, hl.end_time, str(seg_dir))
+
+            # words for this clip:
+            #   captions path -> download only this audio segment + Whisper (accurate word timing)
+            #   fallback path -> reuse full-transcript words (already have them)
+            local_words: list[dict] = []
+            if used_captions:
+                try:
+                    aseg = await asyncio.to_thread(
+                        downloader.download_audio_segment, request.url, hl.start_time, hl.end_time, str(seg_dir))
+                    t = await asyncio.to_thread(transcriber.transcribe, aseg)
+                    local_words = transcriber.words_from_transcript(t)
+                except Exception as e:
+                    job.update(message=f"clip {i+1}: audio segment Whisper failed ({e}); subtitle skipped")
+            else:
+                local_words = [
+                    {**w, "start": w["start"] - hl.start_time, "end": w["end"] - hl.start_time}
+                    for w in full_words
+                    if w["end"] >= hl.start_time and w["start"] <= hl.end_time
+                ]
 
             # face-track reframe to 9:16
             samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
             vertical = str(seg_dir / "vertical.mp4")
             await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
 
-            # word-by-word subtitles (clip-local timing)
-            local_words = [w for w in words if w["end"] >= hl.start_time and w["start"] <= hl.end_time]
-            local_words = [{**w, "start": w["start"] - hl.start_time, "end": w["end"] - hl.start_time} for w in local_words]
+            # word-by-word subtitles + effects
             ass_path = str(seg_dir / "subs.ass")
             if local_words:
                 ass_content = subtitles.words_to_ass(local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT)
@@ -110,7 +149,6 @@ async def _run_pipeline(job: Job, request) -> None:
             thumb = str(seg_dir / "thumb.jpg")
             await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
 
-            # serve from output dir (static mount in main.py)
             rel = f"/clips/{job.job_id}/clip_{i+1}/final.mp4"
             clips.append(ClipInfo(
                 index=i + 1,
