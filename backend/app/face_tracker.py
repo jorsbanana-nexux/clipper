@@ -20,6 +20,7 @@ import numpy as np
 from . import config
 
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
+FFPROBE = shutil.which("ffprobe") or "ffprobe"
 
 
 @dataclass
@@ -146,18 +147,54 @@ def reframe_to_vertical(video_path: str, output_path: str, samples: list[FaceSam
     return _reframe_blur_pad(video_path, output_path)
 
 
-def reframe_duo(video_path: str, output_path: str) -> str:
-    """Two-speaker split-screen: stacked top & bottom bands (9:16)."""
+def _probe_dims(video_path: str) -> tuple[int, int]:
+    """Return (width, height) of the first video stream via ffprobe."""
+    out = subprocess.run(
+        [FFPROBE, "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "csv=p=0", video_path],
+        capture_output=True, text=True,
+    )
+    try:
+        w, h = out.stdout.strip().split(",")
+        return int(w), int(h)
+    except Exception:
+        return 1920, 1080
+
+
+def reframe_duo(video_path: str, output_path: str, two_halves: bool = True) -> str:
+    """Two-speaker split-screen -> stacked top & bottom bands (9:16).
+
+    two_halves=True (default): crop the LEFT half and RIGHT half of the source,
+    then stack them. This is correct for side-by-side podcast/interview frames
+    where the two speakers sit next to each other.
+    two_halves=False: legacy behavior (two copies of the same full frame).
+    """
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
     band_h = TH // 2
-    vf = (
-        f"[0:v]split=2[top][bot];"
-        f"[top]scale={TW}:{band_h}:force_original_aspect_ratio=increase,"
-        f"crop={TW}:{band_h},gblur=sigma=2[top];"
-        f"[bot]scale={TW}:{band_h}:force_original_aspect_ratio=increase,"
-        f"crop={TW}:{band_h},gblur=sigma=2[bot];"
-        f"[top][bot]vstack=inputs=2"
-    )
+    W, H = _probe_dims(video_path)
+
+    if two_halves:
+        half_w = W // 2
+        vf = (
+            f"[0:v]split=2[left][right];"
+            f"[left]crop={half_w}:{H}:0:0,"
+            f"scale={TW}:{band_h}:force_original_aspect_ratio=increase,"
+            f"crop={TW}:{band_h}[left];"
+            f"[right]crop={W-half_w}:{H}:{half_w}:0,"
+            f"scale={TW}:{band_h}:force_original_aspect_ratio=increase,"
+            f"crop={TW}:{band_h}[right];"
+            f"[left][right]vstack=inputs=2"
+        )
+    else:
+        vf = (
+            f"[0:v]split=2[top][bot];"
+            f"[top]scale={TW}:{band_h}:force_original_aspect_ratio=increase,"
+            f"crop={TW}:{band_h}[top];"
+            f"[bot]scale={TW}:{band_h}:force_original_aspect_ratio=increase,"
+            f"crop={TW}:{band_h}[bot];"
+            f"[top][bot]vstack=inputs=2"
+        )
+
     subprocess.run([
         FFMPEG, "-i", video_path, "-vf", vf,
         "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "copy", "-y", output_path,
