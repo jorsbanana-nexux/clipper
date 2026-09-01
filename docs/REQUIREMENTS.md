@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-01 (v0.2 multi-speaker)
+**Terakhir diperbarui:** 2026-09-01 (v0.2 multi-speaker LENGKAP — B2+B5 done)
 
 ---
 
@@ -65,7 +65,7 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 | Auto-reframe 9:16 + pelacakan wajah aktif (ikuti pembicara) | ✅ v0.1 |
 | Multi-face detection + split-screen duo (2 pembicara) | ✅ v0.2 |
 | Speaker diarization (siapa bicara kapan) — opsional (pyannote, gated HF token) | ✅ v0.2 (opsional) |
-| Dynamic speaker switching halus dalam satu clip (webcam ↔ screen share) | ⬜ v0.2.1 (B5, timeline sudah ada) |
+| Dynamic speaker switching halus dalam satu clip (single ↔ duo, crossfade) | ✅ v0.2 (`compositor.py`) |
 
 > **Catatan multi-speaker:** diarization bersifat **opsional** (`CLIPPER_MULTI_SPEAKER=1` +
 > `HUGGINGFACE_TOKEN`) karena menarik `torch` (berat untuk PC low-spec). Tanpa itu, pipeline
