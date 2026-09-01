@@ -16,11 +16,22 @@ from pathlib import Path
 
 import yt_dlp
 
+from . import config
+
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 
 
 def _quiet_opts(extra: dict) -> dict:
-    opts = {"quiet": True, "no_warnings": True, "noplaylist": True}
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "retries": getattr(config, "YDL_RETRIES", 3),
+    }
+    if getattr(config, "YDL_COOKIES_FILE", ""):
+        opts["cookiefile"] = config.YDL_COOKIES_FILE
+    if getattr(config, "YDL_PROXY", ""):
+        opts["proxy"] = config.YDL_PROXY
     opts.update(extra)
     return opts
 
@@ -137,7 +148,7 @@ def _parse_vtt_srt(content: str) -> list[dict]:
     return segments
 
 
-def fetch_captions(url: str) -> list[dict] | None:
+def fetch_captions(url: str):
     '''Return [{start,end,text}] from YouTube captions (0 audio download), or None.'''
     try:
         with yt_dlp.YoutubeDL(_quiet_opts({"skip_download": True})) as ydl:
@@ -147,7 +158,11 @@ def fetch_captions(url: str) -> list[dict] | None:
 
     for group_key in ("subtitles", "automatic_captions"):
         subs = info.get(group_key) or {}
-        langs = [l for l in subs if l.lower().startswith("en")] + [l for l in subs if not l.lower().startswith("en")]
+        hinted = (info.get("language") or "").lower()
+        langs = sorted(
+            list(subs.keys()),
+            key=lambda l: (0 if hinted and l.lower().startswith(hinted.split("-")[0]) else (1 if "original" in l.lower() else 2)),
+        )
         for lang in langs:
             for entry in subs.get(lang, []):
                 if entry.get("ext") not in ("vtt", "srt"):
@@ -160,10 +175,10 @@ def fetch_captions(url: str) -> list[dict] | None:
                         content = r.read().decode("utf-8", errors="replace")
                     segs = _parse_vtt_srt(content)
                     if segs:
-                        return segs
+                        return segs, lang
                 except Exception:
                     continue
-    return None
+    return None, None
 
 
 def download_audio_segment(url: str, start: float, end: float, out_dir: str) -> str:
