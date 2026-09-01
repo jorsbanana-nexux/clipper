@@ -233,11 +233,6 @@ Membuat sistem tahan restart dan terukur.
 - Terverifikasi: sumber kiri-merah / kanan-biru → band atas MERAH, band bawah BIRU,
   audio ikut tersalin. Semua 13 modul backend lolos `py_compile`.
 
-## 6b. Launcher Windows (launcher.bat)
-
-- **`launcher.bat`** = set key/token → simpan `.env` → `pip install -r requirements.txt`
-  (sinkronisasi deps termasuk `python-dotenv`) → start backend + frontend di jendela
-  terpisah → buka browser. Key/token TIDAK boleh di chat — pakai launcher atau edit `.env`.
 
 ## 7. Cara melanjutkan (mulai dari mana)
 
