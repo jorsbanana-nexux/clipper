@@ -88,8 +88,8 @@ clipper/
 ## 🚀 Menjalankan Secara Lokal
 
 > **Windows satu-klik:** [`launcher.bat`](launcher.bat) = set `OPENAI_API_KEY` +
-> `HUGGINGFACE_TOKEN` (Enter kosong = OFF) ke `.env`, lalu buka browser. Environment
-> (Python/ffmpeg/Node/deps) diasumsikan sudah terpasang manual.
+> `HUGGINGFACE_TOKEN` → simpan ke `.env` → sinkronisasi pip deps → start backend +
+> frontend di jendela terpisah → buka browser `http://localhost:3000` otomatis.
 
 
 
