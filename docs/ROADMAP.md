@@ -125,18 +125,19 @@ Inti "wawancara/podcast multi-orang" yang diminta user.
 
 - [x] **B1 — Speaker diarization.** ✅ `diarization.py` (pyannote-audio, **opsional**, gated
       `HUGGINGFACE_TOKEN` + `CLIPPER_MULTI_SPEAKER`). Fallback aman tanpa token.
-- [ ] **B2 — Analisis berbasis speaker.** Umpan label speaker ke GPT agar momen viral bisa
-      disebut "pembicara A memotong pembicara B", dsb.
+- [x] **B2 — Analisis berbasis speaker.** ✅ `analyzer.find_viral_moments(..., turns=...)` menerima
+      speaker turns; prompt menginstruksikan GPT memilih momen pertukaran 2 pembicara + mengisi
+      field `speaker`/`speakers` tiap momen.
 - [x] **B3 — Multi-face tracking.** ✅ `face_tracker.analyze_faces_all` deteksi banyak wajah
       (urut ukuran/confidence). Pemilihan pembicara aktif via diarization (B1).
 - [x] **B4 — Split-screen dua pembicara.** ✅ `face_tracker.reframe_duo` (vstack atas-bawah 9:16).
       Template `single`/`duo`/`share` di `layout.py`.
-- [ ] **B5 — Dynamic speaker switching.** (tersisa) Transisi halus antar template **dalam satu clip**.
-      Fungsi `layout_timeline()` sudah ada (rencana per-segmen); yang kurang = render multi-template
-      per-clip + transisi. Ini langkah v0.2.1 berikutnya.
+- [x] **B5 — Dynamic speaker switching.** ✅ `compositor.py` render timeline multi-template per clip
+      (single ↔ duo) + crossfade `xfade`, audio di-mux ulang agar tetap sinkron. Aktif saat
+      diarization tersedia dan clip punya >1 layout berbeda.
 
-**Acceptance B:** wawancara 2 orang menghasilkan clip dengan kedua wajah terlihat saat
-berdialog, dan pindah panel dengan mulus mengikuti pembicara aktif.
+**Acceptance B:** ✅ v0.2 lengkap — wawancara 2 orang menghasilkan clip dengan kedua wajah
+terlihat saat berdialog (duo), pindah panel mulus mengikuti pembicara aktif (dynamic switching).
 
 ---
 
