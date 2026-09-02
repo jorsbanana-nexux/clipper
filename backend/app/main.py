@@ -41,10 +41,16 @@ def health():
 
 
 @app.post("/jobs", response_model=JobStatus)
-def create_job(request: ClipRequest):
+async def create_job(request: ClipRequest):
+    """FIX(bug): must be `async def` so FastAPI runs it on the main event loop.
+    A sync endpoint runs in a threadpool thread with NO running asyncio loop,
+    so manager.start() -> asyncio.create_task() raised
+    `RuntimeError: no running event loop` (always -> 500 on every /jobs call)."""
     if not config.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY belum diset. Isi OPENAI_API_KEY=sk-... di file .env (lihat README: 'Menjalankan Secara Lokal') lalu restart backend (cek GET /health).")
     job = manager.create()
+    # manager.start is sync but calls asyncio.create_task(); running it from an
+    # async endpoint puts it on the event loop thread, where the loop exists.
     manager.start(job, request)
     return job.status
 

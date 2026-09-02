@@ -331,3 +331,22 @@ Semua 13 modul backend tetap lolos `py_compile` setelah perubahan ini.
   tetap load `.env` via python-dotenv (tidak bergantung pada setup.py).
 - `.env.example` diperbarui: komentar berisi alur manual + link tempat ambil key.
 - Agent masa depan: JANGAN hidupkan ulang `setup.py`. Setup = manual (README).
+
+## 6h. FIX KRITIS: POST /jobs selalu 500 "no running event loop" (2026-09-02)
+
+- **Gejala**: set key benar + ffmpeg ada, tapi tempel URL → klik Generate →
+  **Internal Server Error** selalu, di setiap job.
+- **Akar masalah**: `main.create_job` adalah endpoint **sync** (`def`). FastAPI
+  menjalankan fungsi sync di threadpool thread yang **tidak punya asyncio event
+  loop**. `jobs.JobManager.start` memanggil `asyncio.create_task(...)` yang
+  wajib berada dalam event loop → `RuntimeError: no running event loop` → 500.
+- **Perbaikan**: `create_job` diubah jadi **`async def`** (FastAPI menjalankan
+  async endpoint di event loop utama). `manager.start` tetap sync (membuat task),
+  dipanggil tanpa `await` dari konteks async yang sudah punya loop.
+- **Verifikasi (sandbox)**: `POST /jobs` → `200 OK` status `queued`; pipeline
+  maju sampai tahap `analyze` (progress 0.35) — hanya gagal di auth OpenAI karena
+  key placeholder, bukan bug. Rantai render (blur-pad, duo, crop-follow,
+  subtitle+efek, thumbnail) lolos semua verifikasi ffprobe (audio+video sinkron).
+- **Pelajaran**: endpoint FastAPI yang menjadwalkan task asyncio (via
+  `asyncio.create_task`) HARUS `async def`; fungsi sync di threadpool tidak punya
+  event loop.

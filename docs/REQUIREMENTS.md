@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-02 (bug-fix batch: model valid, timescale diarization, CORS, chunk stream-copy)
+**Terakhir diperbarui:** 2026-09-02 (fix kritis POST /jobs event-loop; + model valid, timescale diarization, CORS, chunk stream-copy)
 
 ---
 
