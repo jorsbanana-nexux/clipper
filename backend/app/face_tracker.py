@@ -235,56 +235,91 @@ def reframe_duo(video_path: str, output_path: str) -> str:
 
 
 def _reframe_crop_follow(video_path, output_path, samples):
+    """Face-follow crop to 9:16 via ffmpeg PIPE decode + cv2 crop + ffmpeg encode.
+
+    Root cause of "Unknown C++ exception from OpenCV": reading/writing frames
+    through cv2.VideoCapture / cv2.VideoWriter — OpenCV's bundled decoder crashes
+    on certain H.264/VP9 frames. Here we DECODE with system ffmpeg (reliable) to
+    raw BGR frames, crop with cv2.resize on guaranteed-valid numpy arrays, then
+    ENCODE with system ffmpeg. Smooth per-frame face-follow and audio sync are
+    preserved; the crash source is removed.
+
+    Blur-pad is used only when the source is geometrically too narrow to crop
+    (sw < TW) — a legitimate aspect-ratio choice, not an error fallback.
+    """
+    if not samples:
+        return _reframe_blur_pad(video_path, output_path)
     ts = [s.t for s in samples]
-    cxs = [s.cx for s in samples]
-    cxs = _smooth_series(cxs)
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cxs = _smooth_series([s.cx for s in samples])
+    W, H = _probe_dims(video_path)
+    if W <= 0 or H <= 0:
+        return _reframe_blur_pad(video_path, output_path)
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
 
     scale = TH / H
-    sw = int(W * scale)
-    if sw < TW:
-        cap.release()
+    sw = int(round(W * scale))
+    max_crop_x = sw - TW
+    if max_crop_x < 0:
+        # source not wide enough for 9:16 after scaling -> blur-pad is correct
         return _reframe_blur_pad(video_path, output_path)
-    max_crop_x = max(0, sw - TW)
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    vw = cv2.VideoWriter(output_path + ".v.mp4", fourcc, fps, (TW, TH))
+    fps = _probe_fps(video_path)
+    frame_bytes = W * H * 3
+    vpath = output_path + ".v.mp4"
+
+    dec = subprocess.Popen(
+        [FFMPEG, "-i", video_path, "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    enc = subprocess.Popen(
+        [FFMPEG, "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
+         "-s", f"{TW}x{TH}", "-r", str(fps), "-i", "-",
+         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+         "-pix_fmt", "yuv420p", vpath],
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
     idx = 0
     try:
         while True:
-            try:
-                ok, frame = cap.read()
-            except Exception:
-                ok, frame = False, None
-            if not ok or frame is None:
+            raw = dec.stdout.read(frame_bytes)
+            if not raw or len(raw) < frame_bytes:
                 break
+            frame = np.frombuffer(raw, np.uint8).reshape((H, W, 3))
             t = idx / fps
             cx = _xcx_at(t, ts, cxs)
-            cx_scaled = cx * sw
-            crop_x = int(np.clip(cx_scaled - TW / 2, 0, max_crop_x))
+            crop_x = int(np.clip(cx * sw - TW / 2, 0, max_crop_x))
+            crop_x -= crop_x % 2
             scaled = cv2.resize(frame, (sw, TH), interpolation=cv2.INTER_AREA)
             cropped = scaled[:, crop_x:crop_x + TW]
-            vw.write(cropped)
+            enc.stdin.write(cropped.tobytes())
             idx += 1
-    except Exception:
-        # OpenCV failed mid-write (bad/corrupt frame) -> fall back to blur-pad
-        # so the clip still renders instead of crashing the whole job.
-        cap.release()
-        vw.release()
-        try:
-            os.remove(output_path + ".v.mp4")
-        except OSError:
-            pass
-        return _reframe_blur_pad(video_path, output_path)
-    cap.release()
-    vw.release()
-    _mux_audio(video_path, output_path + ".v.mp4", output_path)
-    os.remove(output_path + ".v.mp4")
+    finally:
+        dec.stdout.close()
+        dec.wait()
+        if enc.stdin is not None:
+            enc.stdin.close()
+        enc.wait()
+    _mux_audio(video_path, vpath, output_path)
+    try:
+        os.remove(vpath)
+    except OSError:
+        pass
     return output_path
+
+
+def _probe_fps(video_path: str) -> float:
+    """Return the video frame rate via ffprobe (default 30.0)."""
+    out = subprocess.run(
+        [FFPROBE, "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", video_path],
+        capture_output=True, text=True,
+    )
+    try:
+        num, den = out.stdout.strip().split("/")
+        num, den = float(num), float(den)
+        return num / den if den else 30.0
+    except Exception:
+        return 30.0
 
 
 def _reframe_blur_pad(video_path, output_path):

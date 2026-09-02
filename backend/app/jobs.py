@@ -131,6 +131,8 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
 
     vertical = str(seg_dir / "vertical.mp4")
     distinct = {s.get("layout") for s in timeline}
+    job.update(status="rendering", stage=f"render_{index}/reframe",
+               message=f"Clip {index}: membingkai ulang 9:16 + tracking wajah")
     if len(timeline) > 1 and len(distinct) > 1:
         await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
     elif timeline and timeline[0].get("layout") == "duo":
@@ -141,6 +143,8 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
 
     ass_path = str(seg_dir / "subs.ass")
     if local_words:
+        job.update(status="rendering", stage=f"reframe_{index}/subs",
+                   message=f"Clip {index}: membakar subtitle word-by-word + efek")
         ass_content = subtitles.words_to_ass(local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT)
         Path(ass_path).write_text(ass_content, encoding="utf-8")
 
@@ -231,6 +235,7 @@ async def _run_pipeline(job: Job, request) -> None:
                 if job._cancel:
                     return None
                 job.update(status="rendering", stage=f"render_{i + 1}",
+                           progress=0.45 + 0.55 * (i / total),
                            message=f"Rendering clip {i + 1}/{total}: {hl.title}")
                 clip = await _render_one_clip(
                     job, request.url, hl, i + 1,
