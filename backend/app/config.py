@@ -37,6 +37,8 @@ ANALYSIS_BACKEND: str = os.environ.get("ANALYSIS_BACKEND", "gemini")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
 # Current, non-deprecated Gemini model (gemini-2.x/1.5 are removed/404).
 GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+# Auto-retry count on transient Gemini errors (503 high demand / 429 quota).
+GEMINI_RETRIES: int = int(os.environ.get("GEMINI_RETRIES", "4"))
 
 # --- Output / storage ---
 OUTPUT_DIR: Path = Path(os.environ.get("CLIPPER_OUTPUT_DIR", "./output"))

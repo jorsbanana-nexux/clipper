@@ -7,6 +7,7 @@ the prompt so the model can (a) prefer two-person exchanges and (b) return which
 speaker(s) are active in each moment. This feeds dynamic layout selection.
 """
 import json
+import time
 from textwrap import dedent
 
 from . import config
@@ -97,30 +98,45 @@ def _analyze_gemini(prompt: str) -> HighlightAnalysis:
             "google-genai not installed. Run: pip install -U google-genai")
 
     client = genai.Client(api_key=config.GEMINI_API_KEY)
-    resp = client.models.generate_content(
-        model=config.GEMINI_MODEL,
-        contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=HighlightAnalysis,
-            temperature=0.2,
-        ),
-    )
-    # google-genai returns a typed object via `parsed`; fall back to text parse.
-    parsed = getattr(resp, "parsed", None)
-    if parsed is not None:
-        return parsed
-    raw = getattr(resp, "text", "") or ""
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.strip("`")
-        if raw.lower().startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    try:
-        return HighlightAnalysis.model_validate_json(raw)
-    except Exception as e:
-        raise RuntimeError(f"Gemini returned non-JSON / invalid response: {e}") from e
+    max_attempts = max(1, getattr(config, "GEMINI_RETRIES", 4))
+    last_err: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            resp = client.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=HighlightAnalysis,
+                    temperature=0.2,
+                ),
+            )
+            # google-genai returns a typed object via `parsed`; fall back to text parse.
+            parsed = getattr(resp, "parsed", None)
+            if parsed is not None:
+                return parsed
+            raw = getattr(resp, "text", "") or ""
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.strip("`")
+                if raw.lower().startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+            try:
+                return HighlightAnalysis.model_validate_json(raw)
+            except Exception as e:
+                raise RuntimeError(f"Gemini returned non-JSON / invalid response: {e}") from e
+        except Exception as e:
+            last_err = e
+            msg = str(e)
+            transient = ("503" in msg or "429" in msg
+                         or "UNAVAILABLE" in msg or "RESOURCE_EXHAUSTED" in msg
+                         or "high demand" in msg)
+            if transient and attempt < max_attempts - 1:
+                time.sleep(1.5 * (attempt + 1))  # backoff: 1.5s, 3s, ...
+                continue
+            raise  # not transient, or ran out of retries
+    raise last_err
 
 
 def _analyze_openai(prompt: str) -> HighlightAnalysis:
