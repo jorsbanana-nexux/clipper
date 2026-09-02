@@ -386,6 +386,20 @@ Semua klaim "selesai/berfungsi" di Fase A (A1-A7) & Fase B (B1-B5) **diuji nyata
 - Key user **tidak pernah dicetak**; dipakai via env var. Gunakan UI `request_user_secret`
   untuk key baru.
 
+## 6l. Robust OpenCV / tahan-banting render (2026-09-02)
+
+- **Gejala**: `Unknown C++ exception from OpenCV code` — job crash saat render clip
+  ketika OpenCV gagal memproses sebuah frame (video H.264/kode tertentu / frame rusak);
+  `cv2.cvtColor`/`cv2.resize` melempar exception C++ yang tak tertangkap.
+- **Fix `face_tracker.py`:** `_detect_faces_mediapipe`/`_detect_faces_haar` dibungkus
+  try/except (frame gagal -> dianggap tak ada wajah, tidak crash); loop `analyze_faces_all`
+  skip frame kosong/None; `_reframe_crop_follow` jika gagal di tengah -> fallback
+  **blur-pad** (ffmpeg) sehingga clip tetap ter-render.
+- **Fix `jobs.py`:** `asyncio.gather` kini `return_exceptions=True` — satu clip gagal
+  TIDAK membatalkan seluruh job; clip yang gagal dilewati, yang sukses tetap dikembalikan
+  (hanya error jika SEMUA clip gagal).
+- Verifikasi: render-chain 6/6 OK + A/B 13/13 PASS.
+
 ## 6k. Mode GRATIS — faster-whisper lokal + Gemini (2026-09-02)
 
 Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):

@@ -58,8 +58,11 @@ def _make_haar_cascade():
 
 
 def _detect_faces_mediapipe(frame_bgr, det) -> list:
-    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    res = det.process(rgb)
+    try:
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        res = det.process(rgb)
+    except Exception:
+        return []  # OpenCV hiccup on a bad frame -> treat as no face
     if not res.detections:
         return []
     out = []
@@ -71,9 +74,12 @@ def _detect_faces_mediapipe(frame_bgr, det) -> list:
 
 
 def _detect_faces_haar(frame_bgr, casc) -> list:
-    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-    h, w = frame_bgr.shape[:2]
-    faces = casc.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
+    try:
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        h, w = frame_bgr.shape[:2]
+        faces = casc.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
+    except Exception:
+        return []
     out = []
     for (x, y, fw, fh) in faces:
         cx = (x + fw / 2) / w
@@ -118,14 +124,20 @@ def analyze_faces_all(video_path: str, sample_interval: float = 0.5) -> list[Fra
     idx = 0
     try:
         while True:
-            ok, frame = cap.read()
-            if not ok:
+            try:
+                ok, frame = cap.read()
+            except Exception:
+                ok, frame = False, None
+            if not ok or frame is None:
                 break
             if idx % step == 0:
                 t = idx / fps
-                faces = _detect_faces_mediapipe(frame, mp_det) if mp_det is not None else []
-                if not faces and haar_casc is not None:
-                    faces = _detect_faces_haar(frame, haar_casc)
+                try:
+                    faces = _detect_faces_mediapipe(frame, mp_det) if mp_det is not None else []
+                    if not faces and haar_casc is not None:
+                        faces = _detect_faces_haar(frame, haar_casc)
+                except Exception:
+                    faces = []  # any OpenCV/MediaPipe failure on this frame -> skip
                 if faces:
                     dets = _sort_faces(faces)
                     for d in dets:
@@ -242,18 +254,32 @@ def _reframe_crop_follow(video_path, output_path, samples):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     vw = cv2.VideoWriter(output_path + ".v.mp4", fourcc, fps, (TW, TH))
     idx = 0
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        t = idx / fps
-        cx = _xcx_at(t, ts, cxs)
-        cx_scaled = cx * sw
-        crop_x = int(np.clip(cx_scaled - TW / 2, 0, max_crop_x))
-        scaled = cv2.resize(frame, (sw, TH), interpolation=cv2.INTER_AREA)
-        cropped = scaled[:, crop_x:crop_x + TW]
-        vw.write(cropped)
-        idx += 1
+    try:
+        while True:
+            try:
+                ok, frame = cap.read()
+            except Exception:
+                ok, frame = False, None
+            if not ok or frame is None:
+                break
+            t = idx / fps
+            cx = _xcx_at(t, ts, cxs)
+            cx_scaled = cx * sw
+            crop_x = int(np.clip(cx_scaled - TW / 2, 0, max_crop_x))
+            scaled = cv2.resize(frame, (sw, TH), interpolation=cv2.INTER_AREA)
+            cropped = scaled[:, crop_x:crop_x + TW]
+            vw.write(cropped)
+            idx += 1
+    except Exception:
+        # OpenCV failed mid-write (bad/corrupt frame) -> fall back to blur-pad
+        # so the clip still renders instead of crashing the whole job.
+        cap.release()
+        vw.release()
+        try:
+            os.remove(output_path + ".v.mp4")
+        except OSError:
+            pass
+        return _reframe_blur_pad(video_path, output_path)
     cap.release()
     vw.release()
     _mux_audio(video_path, output_path + ".v.mp4", output_path)

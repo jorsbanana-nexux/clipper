@@ -241,9 +241,24 @@ async def _run_pipeline(job: Job, request) -> None:
                                message=f"Rendered {done}/{total} clips")
                 return clip
 
-        rendered = await asyncio.gather(*(render_worker(i, hl) for i, hl in enumerate(highlights)))
-        clips = [c for c in rendered if c is not None]
+        # return_exceptions=True -> one failed clip must NOT abort the whole job;
+        # failed clips are skipped and the rest are returned.
+        rendered = await asyncio.gather(
+            *(render_worker(i, hl) for i, hl in enumerate(highlights)),
+            return_exceptions=True,
+        )
+        clips: list = []
+        failures = 0
+        for c in rendered:
+            if isinstance(c, BaseException):
+                failures += 1
+                continue
+            if c is not None:
+                clips.append(c)
 
+        if not clips:
+            raise RuntimeError(f"Semua {total} clip gagal dirender ({failures} error). "
+                               "Lihat log backend untuk detail.")
         job.update(status="done", stage="done", progress=1.0,
                    message=f"Ready: {len(clips)} clips", clips=clips)
         _cleanup_old_jobs()
