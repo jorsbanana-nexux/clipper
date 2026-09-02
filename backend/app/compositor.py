@@ -137,15 +137,3 @@ def render_dynamic_clip(raw_path: str, timeline: list[dict], out_path: str) -> s
         except OSError:
             pass
     return out_path
-
-
-def rel_timeline(timeline: list[dict], clip_start: float) -> list[dict]:
-    """Shift absolute layout timeline to clip-relative (0-based) times."""
-    out = []
-    for seg in timeline:
-        out.append({
-            "start": max(0.0, seg["start"] - clip_start),
-            "end": seg["end"] - clip_start,
-            "layout": seg["layout"],
-        })
-    return [s for s in out if s["end"] > s["start"]]

@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-02 (setup.py full rewrite: venv + deps + launch otomatis)
+**Terakhir diperbarui:** 2026-09-02 (bug-fix batch: model valid, timescale diarization, CORS, chunk stream-copy)
 
 ---
 
@@ -115,7 +115,7 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 | Backend | Python 3.11, FastAPI, uvicorn |
 | Download | yt-dlp |
 | Transkripsi | OpenAI Whisper (`whisper-1`, word timestamps) |
-| Analisis | OpenAI GPT (`gpt-5.4-mini`, structured output) |
+| Analisis | OpenAI GPT (`gpt-4o-mini`, structured output) |
 | Video | ffmpeg 7.x, OpenCV, MediaPipe |
 | Frontend | Next.js 15 (App Router), React 19 |
 | Storage | Lokal `./output` (v0.1) → S3/Redis (v1.0) |
@@ -181,12 +181,14 @@ Ringkas fase Mode 1:
 - **Padding 1,5 detik** (`CLIPPER_PADDING_SEC`): setiap segmen dipotong sedikit lebih lebar
   (1,5 detik sebelum & sesudah momen) agar momen tidak pernah terpotong walau timestamp
   Whisper meleset 1–2 detik. Tetap pakai `-c copy` (cepat & ringan).
-- **Auto-provision key**: `OPENAI_API_KEY` **wajib** diset pengguna (via `setup.py` sekali;
-  key diketik tersembunyi, disimpan ke `.env`, dan ditampilkan "tersimpan" saat setup ulang — bisa diganti).
-- **Multi-speaker opsional**: `HUGGINGFACE_TOKEN` boleh kosong (OFF); isi = ON, `off` = matikan.
-- **setup.py mandiri**: buat `.venv` Python 3.11 + install Python deps + npm install + set key
-  (WAJIB, tersembunyi) + HF token (opsional) + auto-start backend/frontend + buka browser.
+- **Auto-provision key**: `OPENAI_API_KEY` **wajib** diisi pengguna via file `.env`
+  (salin dari `.env.example`, isi `OPENAI_API_KEY=sk-...`).
+- **Multi-speaker opsional**: `HUGGINGFACE_TOKEN` boleh kosong (OFF); isi = ON.
+  Aktifkan juga `CLIPPER_MULTI_SPEAKER=1`.
+- **Setup manual (setup.py dihapus)**: bikin `.venv` Python 3.11 + install Python deps
+  + `npm install` + isi `.env` + jalankan backend (`backend/run.py`) + frontend.
   Diagnostik: `GET /health` menampilkan `openai_key` (set/missing).
-- **.env.example**: template manual — salin ke `.env`, isi `OPENAI_API_KEY`, tanpa perlu setup.py.
+  Panduan step-by-step: `README.md` (section "Menjalankan Secara Lokal").
+- **.env.example**: template contoh — salin ke `.env`, isi `OPENAI_API_KEY`.
 - **YouTube memblokir IP datacenter** — uji end-to-end harus dari IP rumahan pengguna,
   bukan dari sandbox server.

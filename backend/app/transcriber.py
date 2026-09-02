@@ -87,13 +87,19 @@ def _merge(chunks: list[dict]) -> dict:
 
 
 def _split_audio(audio_path: str, chunk_sec: float, tmp_dir: str) -> list[str]:
-    """Split audio into ~chunk_sec pieces using stream copy (fast, no re-encode)."""
-    pattern = os.path.join(tmp_dir, "chunk_%03d.mp3")
+    """Split audio into ~chunk_sec pieces via stream copy (fast, no re-encode).
+
+    FIX(bug): the chunk container must keep the SOURCE extension so `-c copy`
+    stays valid. Labelling every chunk '.mp3' corrupts the container when the
+    source is actually opus/vorbis/webm (mislabeled mux -> Whisper can't read).
+    """
+    src_ext = Path(audio_path).suffix or ".mp3"
+    pattern = os.path.join(tmp_dir, f"chunk_%03d{src_ext}")
     subprocess.run([
         FFMPEG, "-i", audio_path, "-f", "segment", "-segment_time", str(chunk_sec),
         "-c", "copy", "-y", pattern,
     ], check=True, capture_output=True)
-    return sorted(str(p) for p in Path(tmp_dir).glob("chunk_*.mp3"))
+    return sorted(str(p) for p in Path(tmp_dir).glob(f"chunk_*{src_ext}"))
 
 
 def transcribe(audio_path: str, language: str | None = None) -> dict:

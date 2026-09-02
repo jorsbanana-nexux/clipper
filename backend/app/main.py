@@ -19,7 +19,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
+    allow_origins=config.CORS_ORIGINS or ["*"],  # explicit allow-list (see config.py)
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -43,7 +43,7 @@ def health():
 @app.post("/jobs", response_model=JobStatus)
 def create_job(request: ClipRequest):
     if not config.OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY belum diset. Jalankan setup.bat lalu restart backend (cek GET /health).")
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY belum diset. Isi OPENAI_API_KEY=sk-... di file .env (lihat README: 'Menjalankan Secara Lokal') lalu restart backend (cek GET /health).")
     job = manager.create()
     manager.start(job, request)
     return job.status

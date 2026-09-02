@@ -88,7 +88,9 @@ def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> Hig
             {"role": "user", "content": prompt},
         ],
         response_format=HighlightAnalysis,
-        reasoning_effort="minimal",
+        # FIX(bug): reasoning_effort is only accepted by o-series reasoning
+        # models; the default gpt-4o-mini rejects it. Gate behind config.
+        **({"reasoning_effort": config.ANALYSIS_REASONING} if config.ANALYSIS_REASONING else {}),
     )
     result = resp.choices[0].message.parsed
     if result is None:

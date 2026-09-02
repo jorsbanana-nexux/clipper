@@ -115,8 +115,15 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         clip_layout = config.LAYOUT_MODE
         timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
     elif turns:
-        abs_timeline = layout.layout_timeline(turns, hl.start_time, hl.end_time)
-        timeline = compositor.rel_timeline(abs_timeline, padded_start)
+        # FIX(bug): `turns` are LOCAL — they come from `cut_audio(diar_src,
+        # 0.0, padded_len)` on the already-downloaded segment, so time 0 is the
+        # start of `raw_path` (== padded_start in the absolute video). The
+        # layout timeline must therefore be computed in LOCAL coordinates too.
+        # Previously we built it from absolute hl times and then subtracted
+        # padded_start again in rel_timeline — a double-shift that misaligned
+        # the single/duo switches.
+        loc_dur = padded_end - padded_start
+        timeline = layout.layout_timeline(turns, 0.0, loc_dur)
         timeline = [s for s in timeline if s["end"] > s["start"]]
     else:
         clip_layout = layout.choose_template([], 0.0, 0.0)

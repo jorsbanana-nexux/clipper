@@ -88,7 +88,11 @@ def _sort_faces(faces: list[tuple[float, float, float]]) -> list[FaceSample]:
 
 
 def analyze_faces(video_path: str, sample_interval: float = 0.5) -> list[FaceSample]:
-    """DEPRECATED alias kept for v0.1 callers — returns dominant face only."""
+    """Return the DOMINANT face per sample (single-speaker crop-follow helper).
+
+    Use analyze_faces_all() for multi-speaker layouts. Both share the same
+    underlying detection; this one just collapses each frame to the largest face.
+    """
     frames = analyze_faces_all(video_path, sample_interval)
     out = []
     for fr in frames:

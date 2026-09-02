@@ -65,74 +65,95 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 clipper/
 ├── backend/                 # FastAPI (Python 3.11)
 │   ├── app/
-│   │   ├── main.py          # App entry + routing
+│   │   ├── main.py          # App entry + routing + CORS
 │   │   ├── config.py        # Konfigurasi (env vars)
 │   │   ├── models.py        # Pydantic models
 │   │   ├── jobs.py          # Job manager + pipeline async
-│   │   ├── downloader.py    # yt-dlp (audio + segment ranges)
-│   │   ├── transcriber.py   # Whisper word timestamps
+│   │   ├── downloader.py    # yt-dlp (captions, audio, segment ranges)
+│   │   ├── transcriber.py   # Whisper word timestamps + auto-chunk 25 MiB
 │   │   ├── analyzer.py      # GPT viral-moment detection
+│   │   ├── diarization.py   # Speaker diarization (opsional, pyannote)
+│   │   ├── layout.py        # Template single/duo + layout timeline
+│   │   ├── compositor.py    # Dynamic switching + crossfade
 │   │   ├── face_tracker.py  # MediaPipe face tracking + reframe
 │   │   ├── subtitles.py     # ASS word-by-word
-│   │   └── renderer.py      # ffmpeg clip + efek + thumbnail
+│   │   └── renderer.py      # ffmpeg clip + efek + thumbnail + verify
 │   └── run.py               # Launcher
 ├── frontend/                # Next.js 15 (App Router)
 │   └── app/page.tsx         # Paste URL → progress → library unduh
 ├── docs/
 │   └── REQUIREMENTS.md      # Spesifikasi, arsitektur, roadmap
-├── setup.py                 # Setup key + auto-launch (semua OS)
 ├── .env.example             # Template konfigurasi (salin ke .env)
 └── requirements.txt         # Dependensi Python
 ```
 
 ---
 
-## 🚀 Menjalankan Secara Lokal
+## 🚀 Menjalankan Secara Lokal (manual step-by-step)
 
-> **Semua OS — satu perintah:**
->
-> ```
-> python setup.py
-> ```
->
-> Script ini **otomatis**: **(1)** buat `.venv` Python 3.11, **(2)** install semua
-> Python deps, **(3)** `npm install` frontend, **(4)** tanya
-> `OPENAI_API_KEY` (**WAJIB**, diketik tersembunyi) dan `HUGGINGFACE_TOKEN`
-> (opsional; ketik `off` = matikan), simpan `.env`, jalankan backend +
-> frontend + buka browser. Jalankan lagi kapan saja untuk ganti key.
->
-> **Manual:** salin [`.env.example`](.env.example) → `.env`, isi `OPENAI_API_KEY=sk-...`,
-> lalu jalankan backend via `.venv` dan frontend via `npm run dev`.
+> `setup.py` **sudah dihapus**. Setup sekarang 100% manual — lebih jelas & mudah
+> di-debug. Ikuti 4 langkah di bawah. Total ~5 menit.
 
+### Langkah 1 — Prasyarat
 
+- **Python 3.11** (cek: `py -0` di Windows / `python3 --version` di macOS/Linux).
+- **ffmpeg** di PATH (cek: `ffmpeg -version`).
+- **Node.js 18+** & **npm** (cek: `node -v`).
+- **`OPENAI_API_KEY`** dari [platform.openai.com/api-keys](https://platform.openai.com/api-keys) — **WAJIB**.
+- *(Opsional)* **`HUGGINGFACE_TOKEN`** dari [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) — hanya untuk multi-speaker.
 
-### Prasyarat
-- **Python 3.11** terpasang (cek: `py -0`).
-- **ffmpeg** terpasang dan ada di PATH (cek: `ffmpeg -version`).
-- **Node.js 18+** dan **npm** terpasang (cek: `node -v`).
-- **`OPENAI_API_KEY`** dari [platform.openai.com](https://platform.openai.com/).
+### Langkah 2 — Setup `.env` (di mana key ditaruh)
 
-> `.venv` dan `node_modules` dibuat **otomatis** oleh `python setup.py`.
+Buat file `.env` di **root project** (salin dari template), lalu isi kunci:
 
-### 1. Backend (manual)
+```bash
+# dari root project
+copy .env.example .env      # Windows
+cp .env.example .env        # macOS / Linux
+```
+
+Buka `.env` dan isi: **`OPENAI_API_KEY=`** (WAJIB, tanpa tanda kutip, tanpa spasi) dan opsional **`HUGGINGFACE_TOKEN=`**.
+
+```ini
+# WAJIB
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxx
+
+# OPSIONAL (kosongkan kalau tidak pakai multi-speaker)
+HUGGINGFACE_TOKEN=
+CLIPPER_MULTI_SPEAKER=0
+```
+
+> Jika **tidak** memakai multi-speaker, biarkan `HUGGINGFACE_TOKEN=` kosong dan
+> `CLIPPER_MULTI_SPEAKER=0` — Clipper otomatis berjalan single-speaker (ringan).
+> Jika memakai, isi token lalu set `CLIPPER_MULTI_SPEAKER=1`.
+
+### Langkah 3 — Install & jalankan backend
 
 ```bash
 # Windows
 py -3.11 -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-# (isi OPENAI_API_KEY di .env lebih dulu - salin dari .env.example)
 .venv\Scripts\python backend\run.py
-# → http://localhost:8000   (cek key: GET /health)
+
+# macOS / Linux
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python backend/run.py
 ```
 
-### 2. Frontend
+→ Backend di **http://localhost:8000** · cek status key: `GET /health`.
+
+### Langkah 4 — Install & jalankan frontend
 
 ```bash
-cd clipper/frontend
+cd frontend
 npm install
-BACKEND_URL=http://localhost:8000 npm run dev
-# → http://localhost:3000
+BACKEND_URL=http://localhost:8000 npm run dev   # macOS/Linux
+set BACKEND_URL=http://localhost:8000 && npm run dev   # Windows
+# → buka http://localhost:3000
 ```
+
+> **Ganti key nanti?** Cukup edit `.env` lalu restart backend. Tidak perlu re-install deps.
 
 ---
 

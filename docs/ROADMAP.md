@@ -295,3 +295,39 @@ Membuat sistem tahan restart dan terukur.
 - `.venv` dan `node_modules` tetap di `.gitignore` (tidak di-push; dibuat lokal).
 - Alur pengguna: clone → `python setup.py` → isi key → selesai.
 - Agent masa depan: `.venv` Python = `.venv/Scripts/python.exe` (Win) / `.venv/bin/python` (Unix).
+
+## 6f. Bug-fix batch (2026-09-02)
+
+Batch perbaikan bug mikro & risiko hasil review mikroskopis:
+
+- **Model palsu diperbaiki**: `ANALYSIS_MODEL` default `gpt-5.4-mini` (bukan model
+  OpenAI nyata → HTTP 404 saat analisis) diganti ke **`gpt-4o-mini`** (structured
+  output didukung). Tetap override via env `ANALYSIS_MODEL`. `reasoning_effort`
+  kini di-gate lewat `ANALYSIS_REASONING` (hanya o-series yang menerimanya).
+- **Timescale diarization diperbaiki**: `_render_one_clip` menghitung timeline
+  layout dalam koordinat **lokal** (`layout_timeline(turns, 0.0, loc_dur)`),
+  bukan absolut + `rel_timeline` (yang double-shift). `rel_timeline` dihapus
+  (dead code). Dynamic switching single/duo kini sinkron.
+- **CORS diperketat**: `allow_origins=["*"]` diganti `config.CORS_ORIGINS`
+  (default localhost:3000/8000). Override via env `CLIPPER_CORS_ORIGINS`.
+- **Chunk stream-copy diperbaiki**: `transcriber._split_audio` memakai ekstensi
+  source (bukan hardcode `.mp3`) — mencegah mux rusak saat source opus/webm.
+- **Pesan usang diperbaiki**: referensi `setup.bat` (sudah dihapus) di `main.py`
+  & `config.py` → `setup.py`.
+- **Label DEPRECATED dihapus** dari `face_tracker.analyze_faces` (memang helper
+  single-speaker yang sah, bukan alias usang).
+
+Semua 13 modul backend tetap lolos `py_compile` setelah perubahan ini.
+
+## 6g. Hapus setup.py — beralih ke setup manual (2026-09-02)
+
+- **Keputusan**: `setup.py` (auto venv + deps + npm + prompt key + auto-launch)
+  **dihapus** karena terlalu besar, sulit di-debug, dan kaku (kunci Python 3.11,
+  auto-launch server tidak stabil).
+- **Ganti**: setup 100% manual — bikin `.venv`, install deps, isi `.env`
+  (`OPENAI_API_KEY` WAJIB + `HUGGINGFACE_TOKEN` opsional), jalankan backend +
+  frontend. Panduan step-by-step ada di `README.md` ("Menjalankan Secara Lokal").
+- `setup.py` sendiri tidak lagi dipakai/diwartu oleh `config.py`; `config.py`
+  tetap load `.env` via python-dotenv (tidak bergantung pada setup.py).
+- `.env.example` diperbarui: komentar berisi alur manual + link tempat ambil key.
+- Agent masa depan: JANGAN hidupkan ulang `setup.py`. Setup = manual (README).

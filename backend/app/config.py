@@ -4,7 +4,7 @@ All values come from environment variables with sensible defaults, so the
 service can be deployed anywhere (local, Docker, a VPS) without code changes.
 
 A `.env` file at the REPO ROOT is loaded automatically (python-dotenv), so
-`setup.bat` / `launcher.bat` can persist credentials there.
+users can store credentials there by editing `.env` (copy from `.env.example`).
 """
 import os
 from pathlib import Path
@@ -18,11 +18,31 @@ load_dotenv(_REPO_ROOT / ".env", override=False)  # env vars win over .env
 # --- AI (bring your own key) ---
 OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
 WHISPER_MODEL: str = os.environ.get("WHISPER_MODEL", "whisper-1")
-ANALYSIS_MODEL: str = os.environ.get("ANALYSIS_MODEL", "gpt-5.4-mini")
+# FIX(bug): 'gpt-5.4-mini' is not a real OpenAI model and would 404 at runtime.
+# Default to a widely-available structured-output model (gpt-4o-mini).
+# Override via env: ANALYSIS_MODEL=gpt-5 ...
+ANALYSIS_MODEL: str = os.environ.get("ANALYSIS_MODEL", "gpt-4o-mini")
+# Optional reasoning effort for o-series reasoning models ONLY. Leave empty for
+# standard models (gpt-4o-mini etc.) which reject the parameter.
+ANALYSIS_REASONING: str = os.environ.get("ANALYSIS_REASONING", "").strip()
 
 # --- Output / storage ---
 OUTPUT_DIR: Path = Path(os.environ.get("CLIPPER_OUTPUT_DIR", "./output"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# --- CORS ---
+# Allowed origins. The Next.js frontend uses server-side rewrites, so the
+# browser never calls the backend cross-origin in the default dev setup.
+# Restrict to explicit localhost origins; override for a public deploy.
+CORS_ORIGINS: list[str] = [
+    o.strip()
+    for o in os.environ.get(
+        "CLIPPER_CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:8000,http://127.0.0.1:8000",
+    ).split(",")
+    if o.strip()
+]
 
 # --- Clip defaults ---
 DEFAULT_MAX_CLIPS: int = int(os.environ.get("CLIPPER_MAX_CLIPS", "8"))
