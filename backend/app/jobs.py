@@ -79,30 +79,24 @@ async def _run_pipeline(job: Job, request) -> None:
         # ---- 1. transcript: captions-first (no audio) -> fallback full audio ----
         job.update(status="downloading", stage="transcript", progress=0.05,
                    message="Fetching transcript (captions-first)...")
-        caption_segments, caption_lang = await asyncio.to_thread(downloader.fetch_captions, request.url)
-
-        title = "Untitled"
+        caption_segments, caption_lang, _ = await asyncio.to_thread(downloader.fetch_captions, request.url)
         used_captions = bool(caption_segments)
         full_words: list[dict] = []
         analysis_segments: list[dict] = []
-        transcript_text: str = ""
         duration: float = 0.0
         audio_path: str | None = None
 
         if used_captions:
-            transcript_text = " ".join(s.get("text", "") for s in caption_segments)
             analysis_segments = caption_segments
             job.update(stage="transcript_captions", progress=0.2,
                        message="Transcript ready (captions, no audio downloaded)")
         else:
             job.update(stage="download_audio", message="No captions — downloading audio...")
             audio_path, info = await asyncio.to_thread(downloader.download_audio_only, request.url, str(work_dir))
-            title = (info or {}).get("title", "Untitled")
             duration = float((info or {}).get("duration") or 0.0)
             job.update(stage="transcribe", progress=0.2,
                        message="Transcribing speech (word-level)...")
             transcript = await asyncio.to_thread(transcriber.transcribe, audio_path)
-            transcript_text = transcript.get("text", "")
             full_words = transcriber.words_from_transcript(transcript)
             analysis_segments = transcriber.segments_from_transcript(transcript)
 
@@ -122,7 +116,7 @@ async def _run_pipeline(job: Job, request) -> None:
                 analysis_turns = []
         analysis = await asyncio.to_thread(
             analyzer.find_viral_moments,
-            transcript_text, analysis_segments, request.max_clips,
+            analysis_segments, request.max_clips,
             config.MIN_CLIP_SEC, config.MAX_CLIP_SEC, analysis_turns,
         )
         highlights = analysis.highlights[:request.max_clips]
@@ -177,11 +171,9 @@ async def _run_pipeline(job: Job, request) -> None:
                     # raw_path is the padded video segment — always present. Convert the
                     # segment to 16 kHz mono WAV before diarization. Only operate on the
                     # short per-clip segment so it stays light.
-                    if aseg:
-                        diar_audio = aseg
-                    else:
-                        diar_audio = str(seg_dir / "diar_audio.wav")
-                        await asyncio.to_thread(renderer.cut_audio, raw_path, 0.0, padded_end - padded_start, diar_audio)
+                    diar_audio = str(seg_dir / "diar_audio.wav")
+                    diar_src = aseg if aseg else raw_path
+                    await asyncio.to_thread(renderer.cut_audio, diar_src, 0.0, padded_end - padded_start, diar_audio)
                     turns = await asyncio.to_thread(diarization.diarize, diar_audio)
                 except Exception:
                     turns = []

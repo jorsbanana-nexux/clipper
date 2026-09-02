@@ -240,3 +240,18 @@ Membuat sistem tahan restart dan terukur.
 2. Jalankan backend (`python backend/run.py`) + frontend (`cd frontend && npm install && npm run dev`).
 3. **Mulai dari Fase A0** — uji end-to-end dengan video pendek, catat semua error.
 4. Kerjakan A1..A7, lalu B1..B5. Update dokumen setelah tiap fase selesai.
+
+---
+
+## 6b. Perbaikan bug & hardening (2026-09-02)
+
+- `fetch_captions` selalu mengembalikan tuple 3 elemen `(segments, lang, title)` dan
+  `lang` dinormalisasi ke kode ISO 639-1 (fix crash saat metadata tidak bisa diambil).
+- Detektor wajah (MediaPipe + Haar) di-inisialisasi **sekali**, bukan per frame.
+- `reframe` crop-follow fallback ke blur-pad bila sumber lebih sempit dari 9:16.
+- Diarization kini selalu memakai WAV 16 kHz mono (bukan mp3 mentah).
+- `verify_output` kini menegakkan keberadaan stream audio (A/V sinkron benar-benar dijaga).
+- `download_full_and_cut` / `download_full_audio_and_cut` memberi error jelas bila unduhan
+  tidak menghasilkan file (bukan `IndexError`).
+- Bersihkan dead code: `fill_note`, `transcript_text`, variabel `title` tak terpakai.
+- `README.md` + `setup.bat`: referensi `launcher.bat` (file sudah dihapus) diperbaiki.

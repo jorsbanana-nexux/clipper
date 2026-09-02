@@ -96,7 +96,10 @@ def download_full_and_cut(url: str, start: float, end: float, out_dir: str) -> s
     })
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
-    full = [p for p in Path(out_dir).glob("full.*") if p.suffix in (".mp4", ".webm", ".mkv")][0]
+    fulls = [p for p in Path(out_dir).glob("full.*") if p.suffix in (".mp4", ".webm", ".mkv")]
+    if not fulls:
+        raise RuntimeError("Full video download produced no usable file")
+    full = fulls[0]
     cut = os.path.join(out_dir, "cut.mp4")
     dur = end - start
     subprocess.run([
@@ -149,12 +152,13 @@ def _parse_vtt_srt(content: str) -> list[dict]:
 
 
 def fetch_captions(url: str):
-    '''Return [{start,end,text}] from YouTube captions (0 audio download), or None.'''
+    '''Return (segments, lang, title) from YouTube captions (0 audio download).
+    Returns (None, None, None) when captions cannot be fetched or parsed.'''
     try:
         with yt_dlp.YoutubeDL(_quiet_opts({"skip_download": True})) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception:
-        return None
+        return None, None, None
 
     for group_key in ("subtitles", "automatic_captions"):
         subs = info.get(group_key) or {}
@@ -175,10 +179,10 @@ def fetch_captions(url: str):
                         content = r.read().decode("utf-8", errors="replace")
                     segs = _parse_vtt_srt(content)
                     if segs:
-                        return segs, lang
+                        return segs, (lang.split("-")[0].lower() if lang else None), info.get("title")
                 except Exception:
                     continue
-    return None, None
+    return None, None, None
 
 
 def download_audio_segment(url: str, start: float, end: float, out_dir: str) -> str:
@@ -211,7 +215,10 @@ def download_full_audio_and_cut(url: str, start: float, end: float, out_dir: str
     })
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
-    full = [p for p in Path(out_dir).glob("afull.*")][0]
+    fulls = [p for p in Path(out_dir).glob("afull.*")]
+    if not fulls:
+        raise RuntimeError("Full audio download produced no file")
+    full = fulls[0]
     cut = os.path.join(out_dir, f"acut{full.suffix}")
     dur = end - start
     subprocess.run([

@@ -87,9 +87,10 @@ clipper/
 
 ## 🚀 Menjalankan Secara Lokal
 
-> **Windows satu-klik:** [`launcher.bat`](launcher.bat) = set `OPENAI_API_KEY` +
-> `HUGGINGFACE_TOKEN` → simpan ke `.env` → sinkronisasi pip deps → start backend +
-> frontend di jendela terpisah → buka browser `http://localhost:3000` otomatis.
+    > **Windows:** jalankan [`setup.bat`](setup.bat) untuk menyetel `OPENAI_API_KEY`
+    > dan `HUGGINGFACE_TOKEN` (disimpan ke `.env`), lalu mulai backend
+    > (`python backend/run.py`) dan frontend (`cd frontend && npm install && npm run dev`)
+    > di dua terminal terpisah &mdash; buka `http://localhost:3000`.
 
 
 

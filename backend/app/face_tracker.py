@@ -38,24 +38,39 @@ class FrameFaces:
     faces: list[FaceSample] = field(default_factory=list)
 
 
-def _detect_faces_mediapipe(frame_bgr):
-    import mediapipe as mp
-    mp_face = mp.solutions.face_detection
-    with mp_face.FaceDetection(model_selection=1, min_detection_confidence=0.5) as det:
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        res = det.process(rgb)
-        if not res.detections:
-            return []
-        out = []
-        for d in res.detections:
-            bb = d.location_data.relative_bounding_box
-            cx = bb.xmin + bb.width / 2
-            out.append((cx, bb.width, float(d.score[0])))
-        return out
+def _make_mediapipe_detector():
+    """Instantiate the MediaPipe face detector once (model load is expensive)."""
+    try:
+        import mediapipe as mp
+        return mp.solutions.face_detection.FaceDetection(
+            model_selection=1, min_detection_confidence=0.5)
+    except Exception:
+        return None
 
 
-def _detect_faces_haar(frame_bgr):
-    casc = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+def _make_haar_cascade():
+    """Load the OpenCV Haar cascade once, returning None if unavailable."""
+    try:
+        casc = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        return casc if not casc.empty() else None
+    except Exception:
+        return None
+
+
+def _detect_faces_mediapipe(frame_bgr, det) -> list:
+    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    res = det.process(rgb)
+    if not res.detections:
+        return []
+    out = []
+    for d in res.detections:
+        bb = d.location_data.relative_bounding_box
+        cx = bb.xmin + bb.width / 2
+        out.append((cx, bb.width, float(d.score[0])))
+    return out
+
+
+def _detect_faces_haar(frame_bgr, casc) -> list:
     gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
     h, w = frame_bgr.shape[:2]
     faces = casc.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
@@ -91,24 +106,35 @@ def analyze_faces_all(video_path: str, sample_interval: float = 0.5) -> list[Fra
         return []
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     step = max(1, int(fps * sample_interval))
+
+    mp_det = _make_mediapipe_detector()
+    haar_casc = _make_haar_cascade()
+
     frames: list[FrameFaces] = []
     idx = 0
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        if idx % step == 0:
-            t = idx / fps
-            faces = _detect_faces_mediapipe(frame)
-            if not faces:
-                faces = _detect_faces_haar(frame)
-            if faces:
-                dets = _sort_faces(faces)
-                for d in dets:
-                    d.t = t
-                frames.append(FrameFaces(t=t, faces=dets))
-        idx += 1
-    cap.release()
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if idx % step == 0:
+                t = idx / fps
+                faces = _detect_faces_mediapipe(frame, mp_det) if mp_det is not None else []
+                if not faces and haar_casc is not None:
+                    faces = _detect_faces_haar(frame, haar_casc)
+                if faces:
+                    dets = _sort_faces(faces)
+                    for d in dets:
+                        d.t = t
+                    frames.append(FrameFaces(t=t, faces=dets))
+            idx += 1
+    finally:
+        cap.release()
+        try:
+            if mp_det is not None:
+                mp_det.close()
+        except Exception:
+            pass
     return frames
 
 
@@ -204,6 +230,9 @@ def _reframe_crop_follow(video_path, output_path, samples):
 
     scale = TH / H
     sw = int(W * scale)
+    if sw < TW:
+        cap.release()
+        return _reframe_blur_pad(video_path, output_path)
     max_crop_x = max(0, sw - TW)
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")

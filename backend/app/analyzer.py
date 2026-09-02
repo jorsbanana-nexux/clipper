@@ -31,7 +31,7 @@ def _format_turns(turns: list[dict], limit: int = 300) -> str:
     return "\n".join(lines)
 
 
-def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur, turns=None) -> HighlightAnalysis:
+def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> HighlightAnalysis:
     if not config.OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not set. Provide it via environment.")
 
@@ -45,13 +45,11 @@ def find_viral_moments(transcript_text, segments, max_clips, min_dur, max_dur, t
             "labels active in that window. Prefer moments where two speakers exchange "
             "(disagreement, interruption, rapid back-and-forth) - those tend to go viral."
         )
-        fill_note = ""
     else:
         speaker_instruction = (
             "Speaker diarization is NOT available. Leave 'speaker' empty and "
             "'speakers' empty."
         )
-        fill_note = ""
 
     prompt = dedent("""
         You are an elite short-form video editor. Given a podcast transcript with

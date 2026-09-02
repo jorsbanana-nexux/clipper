@@ -95,6 +95,8 @@ def verify_output(video_path: str, expect_min_duration: float = 1.0) -> dict:
 
     if not has_video:
         raise RuntimeError("No video stream in output")
+    if not has_audio:
+        raise RuntimeError("No audio stream in output")
     if dur < expect_min_duration:
         raise RuntimeError(f"Output duration {dur:.2f}s < expected {expect_min_duration}s")
 

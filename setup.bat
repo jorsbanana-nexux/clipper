@@ -84,6 +84,6 @@ if defined NEW_HF (
     echo     CLIPPER_MULTI_SPEAKER = (kosong)
 )
 echo.
-echo Selesai. Tutup jendela ini, lalu jalankan launcher.bat.
+echo Selesai. Tutup jendela ini, lalu mulai backend & frontend secara manual.
 pause >nul
 exit /b 0
