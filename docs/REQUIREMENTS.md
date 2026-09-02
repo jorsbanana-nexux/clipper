@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-02 (setup.bat rombak; A1 & A6 ter-wire penuh)
+**Terakhir diperbarui:** 2026-09-02 (setup.py ganti setup.py; A1 & A6 ter-wire penuh)
 
 ---
 
@@ -181,10 +181,11 @@ Ringkas fase Mode 1:
 - **Padding 1,5 detik** (`CLIPPER_PADDING_SEC`): setiap segmen dipotong sedikit lebih lebar
   (1,5 detik sebelum & sesudah momen) agar momen tidak pernah terpotong walau timestamp
   Whisper meleset 1–2 detik. Tetap pakai `-c copy` (cepat & ringan).
-- **Auto-provision key**: `OPENAI_API_KEY` **wajib** diset pengguna (via `setup.bat` sekali;
-  key tersimpan di `.env` dan ditampilkan "tersimpan & terverifikasi" saat setup ulang, bisa diganti).
+- **Auto-provision key**: `OPENAI_API_KEY` **wajib** diset pengguna (via `setup.py` sekali;
+  key diketik tersembunyi, disimpan ke `.env`, dan ditampilkan "tersimpan" saat setup ulang — bisa diganti).
 - **Multi-speaker opsional**: `HUGGINGFACE_TOKEN` boleh kosong (OFF); isi = ON, `off` = matikan.
-- **setup.bat mandiri**: set key + sync deps + auto-start backend/frontend + buka browser.
+- **setup.py mandiri**: set key (WAJIB) + HF token (opsional) + auto-start backend/frontend + buka browser.
   Diagnostik: `GET /health` menampilkan `openai_key` (set/missing).
+- **.env.example**: template manual — salin ke `.env`, isi `OPENAI_API_KEY`, tanpa perlu setup.py.
 - **YouTube memblokir IP datacenter** — uji end-to-end harus dari IP rumahan pengguna,
   bukan dari sandbox server.

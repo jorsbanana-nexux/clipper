@@ -80,6 +80,8 @@ clipper/
 │   └── app/page.tsx         # Paste URL → progress → library unduh
 ├── docs/
 │   └── REQUIREMENTS.md      # Spesifikasi, arsitektur, roadmap
+├── setup.py                 # Setup key + auto-launch (semua OS)
+├── .env.example             # Template konfigurasi (salin ke .env)
 └── requirements.txt         # Dependensi Python
 ```
 
@@ -87,10 +89,14 @@ clipper/
 
 ## 🚀 Menjalankan Secara Lokal
 
-> **Windows (disarankan):** jalankan [`setup.bat`](setup.bat) sekali — ia meminta
-> `OPENAI_API_KEY` (**WAJIB**) dan `HUGGINGFACE_TOKEN` (opsional, untuk multi-speaker),
-> menyimpannya ke `.env`, lalu otomatis menjalankan backend + frontend dan membuka
-> browser `http://localhost:3000`. Cek status key kapan saja via `GET /health`.
+> **Semua OS (disarankan):** jalankan [`setup.py`](setup.py) sekali — ia meminta
+> `OPENAI_API_KEY` (**WAJIB**, diketik tersembunyi) dan `HUGGINGFACE_TOKEN`
+> (opsional → multi-speaker; ketik `off` = matikan), menulis `.env`, lalu otomatis
+> menjalankan backend + frontend + membuka browser `http://localhost:3000`.
+> Cek status key via `GET /health`.
+>
+> **Manual:** salin [`.env.example`](.env.example) → `.env`, isi `OPENAI_API_KEY=sk-...`,
+> lalu jalankan backend & frontend seperti langkah di bawah.
 
 
 

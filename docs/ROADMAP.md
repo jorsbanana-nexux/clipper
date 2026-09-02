@@ -260,13 +260,24 @@ Membuat sistem tahan restart dan terukur.
 
 ---
 
-## 6c. Rombak setup.bat + wire A1/A6 (2026-09-02)
+## 6c. Wire A1/A6 (2026-09-02)
 
-- `setup.bat` dirombak total menjadi satu launcher mandiri:
-  - `OPENAI_API_KEY` **WAJIB** (loop minta ulang bila kosong; tampil "tersimpan & terverifikasi").
-  - `HUGGINGFACE_TOKEN` **opsional** (Enter = pertahankan status; ketik token = ON; `off` = matikan).
-  - Simpan ke `.env` tanpa duplikat, lalu **auto-start** backend + frontend + buka browser.
 - `GET /health` kini menampilkan status `openai_key` (set/missing) & `multi_speaker`,
   dan `/jobs` memberi pesan error yang jelas bila key belum diset.
 - A1 ter-wire penuh (`downloader._ffmpeg_cut` taat `CLIPPER_CUT_MODE`).
 - A6 aktif (`asyncio.Semaphore(CLIPPER_MAX_PARALLEL)` membatasi render antar-clip).
+
+## 6d. Hapus setup.bat — ganti setup.py (2026-09-02)
+
+- **Penyebab bug**: `setup.bat` hasil suntingan memakai line-ending **LF** (bukan CRLF yang
+  diwajibkan `cmd.exe`) dan karakter `&` di `echo ... Backend & Frontend`. Keduanya merusak
+  batch: prompt key tampil, lalu jendela langsung menutup tanpa menyimpan `.env`, tanpa
+  menanyakan token HF, dan tanpa menjalankan server.
+- **Solusi permanen**: `setup.bat` **dihapus**. Penggantinya `setup.py` (Python) yang:
+  - memakai `getpass` sehingga key/token **tidak tercetak** saat diketik,
+  - key AI wajib (loop), HF token opsional (Enter = pertahankan / isi = ON / `off` = matikan),
+  - menulis `.env` tanpa duplikat, lalu auto-start backend + frontend + buka browser,
+  - error selalu tampil di konsol (tidak pernah menutup senyap).
+- **Manual fallback**: salin `.env.example` → `.env`, isi `OPENAI_API_KEY=...`.
+- **Pelajaran untuk agent**: jangan edit file `.bat` dari sandbox Linux tanpa menormalkan
+  line-ending ke CRLF; jangan letakkan `&` mentah di `echo` batch. Gunakan `setup.py` (Python).
