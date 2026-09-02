@@ -31,13 +31,28 @@ app.mount("/clips", StaticFiles(directory=str(config.OUTPUT_DIR)), name="clips")
 
 @app.get("/health")
 def health():
-    key_set = bool(config.OPENAI_API_KEY)
+    if config.ANALYSIS_BACKEND == "gemini":
+        analysis_ready = bool(config.GEMINI_API_KEY)
+        analysis_label = "gemini"
+    else:
+        analysis_ready = bool(config.OPENAI_API_KEY)
+        analysis_label = "openai"
     return {
         "status": "ok",
         "ffmpeg": bool(shutil.which("ffmpeg")),
-        "openai_key": "set" if key_set else "missing",
+        "whisper_backend": config.WHISPER_BACKEND,
+        "analysis_backend": analysis_label,
+        "openai_key": "set" if config.OPENAI_API_KEY else "missing",
+        "gemini_key": "set" if config.GEMINI_API_KEY else "missing",
+        "analysis_ready": analysis_ready,
         "multi_speaker": bool(config.MULTI_SPEAKER and config.HUGGINGFACE_TOKEN),
     }
+
+
+def _analysis_key_ready() -> bool:
+    if config.ANALYSIS_BACKEND == "gemini":
+        return bool(config.GEMINI_API_KEY)
+    return bool(config.OPENAI_API_KEY)
 
 
 @app.post("/jobs", response_model=JobStatus)
@@ -46,8 +61,18 @@ async def create_job(request: ClipRequest):
     A sync endpoint runs in a threadpool thread with NO running asyncio loop,
     so manager.start() -> asyncio.create_task() raised
     `RuntimeError: no running event loop` (always -> 500 on every /jobs call)."""
-    if not config.OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY belum diset. Isi OPENAI_API_KEY=sk-... di file .env (lihat README: 'Menjalankan Secara Lokal') lalu restart backend (cek GET /health).")
+    if not _analysis_key_ready():
+        if config.ANALYSIS_BACKEND == "gemini":
+            detail = (
+                "GEMINI_API_KEY belum diset. Isi GEMINI_API_KEY=... di file .env "
+                "(ambil gratis di https://aistudio.google.com/apikey) lalu restart "
+                "backend (cek GET /health).")
+        else:
+            detail = (
+                "OPENAI_API_KEY belum diset. Isi OPENAI_API_KEY=sk-... di file .env "
+                "(lihat README: 'Menjalankan Secara Lokal') lalu restart backend "
+                "(cek GET /health).")
+        raise HTTPException(status_code=500, detail=detail)
     job = manager.create()
     # manager.start is sync but calls asyncio.create_task(); running it from an
     # async endpoint puts it on the event loop thread, where the loop exists.

@@ -99,8 +99,12 @@ clipper/
 - **Python 3.11** (cek: `py -0` di Windows / `python3 --version` di macOS/Linux).
 - **ffmpeg** di PATH (cek: `ffmpeg -version`).
 - **Node.js 18+** & **npm** (cek: `node -v`).
-- **`OPENAI_API_KEY`** dari [platform.openai.com/api-keys](https://platform.openai.com/api-keys) — **WAJIB**.
+- **Mode GRATIS (tanpa modal):** `GEMINI_API_KEY` dari [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — gratis, tanpa kartu. Transkripsi pakai **faster-whisper lokal** (0 rupiah).
+- *(Alternatif berbayar)* **`OPENAI_API_KEY`** dari [platform.openai.com/api-keys](https://platform.openai.com/api-keys) — hanya jika ingin pakai OpenAI.
 - *(Opsional)* **`HUGGINGFACE_TOKEN`** dari [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) — hanya untuk multi-speaker.
+
+> 💡 **Rekomendasi**: Clipper bisa dijalankan **100% gratis** — transkripsi di PC
+> Anda (faster-whisper) + analisis via Gemini (free tier). Tidak perlu OpenAI sama sekali.
 
 ### Langkah 2 — Setup `.env` (di mana key ditaruh)
 
@@ -112,11 +116,20 @@ copy .env.example .env      # Windows
 cp .env.example .env        # macOS / Linux
 ```
 
-Buka `.env` dan isi: **`OPENAI_API_KEY=`** (WAJIB, tanpa tanda kutip, tanpa spasi) dan opsional **`HUGGINGFACE_TOKEN=`**.
+Buka `.env` dan isi. **Mode gratis** (disarankan): biarkan `OPENAI_API_KEY=` kosong,
+isi `GEMINI_API_KEY=...` (dari aistudio.google.com/apikey).
 
 ```ini
-# WAJIB
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxx
+# MODE GRATIS (transkripsi lokal + Gemini)
+WHISPER_BACKEND=local
+WHISPER_MODEL_SIZE=small      # pakai 'tiny'/'base' untuk PC low-RAM
+ANALYSIS_BACKEND=gemini
+GEMINI_API_KEY=AIza...        # gratis, dari aistudio.google.com/apikey
+
+# ALTERNATIF: mode OpenAI (berbayar)
+# ANALYSIS_BACKEND=openai
+# WHISPER_BACKEND=openai
+# OPENAI_API_KEY=sk-...
 
 # OPSIONAL (kosongkan kalau tidak pakai multi-speaker)
 HUGGINGFACE_TOKEN=
@@ -133,6 +146,7 @@ CLIPPER_MULTI_SPEAKER=0
 # Windows
 py -3.11 -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -r requirements-free.txt   # mode gratis: faster-whisper + Gemini
 .venv\Scripts\python backend\run.py
 
 # macOS / Linux

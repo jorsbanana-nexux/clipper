@@ -1,12 +1,13 @@
-"""Viral-moment detection: GPT analyses the transcript and picks the best clips.
+"""Viral-moment detection: an LLM analyses the transcript and picks the best clips.
+
+Backends: "gemini" (free Google AI Studio tier, default) or "openai".
 
 B2 (v0.2): when speaker turns (diarization) are provided, they are injected into
 the prompt so the model can (a) prefer two-person exchanges and (b) return which
 speaker(s) are active in each moment. This feeds dynamic layout selection.
 """
+import json
 from textwrap import dedent
-
-from openai import OpenAI
 
 from . import config
 from .models import HighlightAnalysis
@@ -31,13 +32,9 @@ def _format_turns(turns: list[dict], limit: int = 300) -> str:
     return "\n".join(lines)
 
 
-def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> HighlightAnalysis:
-    if not config.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not set. Provide it via environment.")
-
+def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
     has_turns = bool(turns)
     turns_block = _format_turns(turns) if has_turns else "(no speaker diarization available)"
-
     if has_turns:
         speaker_instruction = (
             "Speaker diarization IS available. For each viral moment, fill the "
@@ -50,8 +47,7 @@ def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> Hig
             "Speaker diarization is NOT available. Leave 'speaker' empty and "
             "'speakers' empty."
         )
-
-    prompt = dedent("""
+    return dedent("""
         You are an elite short-form video editor. Given a podcast transcript with
         timestamps, pick the {max_clips} most viral-worthy, emotionally engaging
         moments that would make people rewatch and share.
@@ -80,6 +76,44 @@ def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> Hig
         speaker_instruction=speaker_instruction,
     )
 
+
+def _analyze_gemini(prompt: str) -> HighlightAnalysis:
+    """Free Google AI Studio (Gemini) backend — needs GEMINI_API_KEY."""
+    if not config.GEMINI_API_KEY:
+        raise RuntimeError(
+            "ANALYSIS_BACKEND=gemini but GEMINI_API_KEY is empty. "
+            "Get a free key at https://aistudio.google.com/apikey and set it in .env "
+            "(or set ANALYSIS_BACKEND=openai to use OpenAI).")
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        raise RuntimeError(
+            "google-generativeai not installed. Run: pip install google-generativeai")
+
+    genai.configure(api_key=config.GEMINI_API_KEY)
+    model = genai.GenerativeModel(config.GEMINI_MODEL)
+    resp = model.generate_content(
+        prompt,
+        generation_config=genai.types.GenerationConfig(response_mime_type="application/json"),
+    )
+    raw = getattr(resp, "text", "") or ""
+    # strip markdown fences if the model wraps JSON in them
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    try:
+        return HighlightAnalysis.model_validate_json(raw)
+    except Exception as e:
+        raise RuntimeError(f"Gemini returned non-JSON / invalid response: {e}") from e
+
+
+def _analyze_openai(prompt: str) -> HighlightAnalysis:
+    if not config.OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not set. Provide it via environment.")
+    from openai import OpenAI
     client = OpenAI(api_key=config.OPENAI_API_KEY)
     resp = client.beta.chat.completions.parse(
         model=config.ANALYSIS_MODEL,
@@ -88,11 +122,20 @@ def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> Hig
             {"role": "user", "content": prompt},
         ],
         response_format=HighlightAnalysis,
-        # FIX(bug): reasoning_effort is only accepted by o-series reasoning
-        # models; the default gpt-4o-mini rejects it. Gate behind config.
+        # reasoning_effort is only accepted by o-series reasoning models; gate.
         **({"reasoning_effort": config.ANALYSIS_REASONING} if config.ANALYSIS_REASONING else {}),
     )
     result = resp.choices[0].message.parsed
     if result is None:
         raise RuntimeError("AI analysis returned an incomplete response.")
     return result
+
+
+def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> HighlightAnalysis:
+    prompt = _build_prompt(segments, max_clips, min_dur, max_dur, turns)
+    backend = getattr(config, "ANALYSIS_BACKEND", "gemini")
+    if backend == "gemini":
+        return _analyze_gemini(prompt)
+    if backend == "openai":
+        return _analyze_openai(prompt)
+    raise RuntimeError(f"Unknown ANALYSIS_BACKEND: {backend}")

@@ -26,6 +26,17 @@ ANALYSIS_MODEL: str = os.environ.get("ANALYSIS_MODEL", "gpt-4o-mini")
 # standard models (gpt-4o-mini etc.) which reject the parameter.
 ANALYSIS_REASONING: str = os.environ.get("ANALYSIS_REASONING", "").strip()
 
+# --- FREE backends (no OpenAI cost) ---
+# Whisper: "local" = faster-whisper runs on THIS machine (0 cost); "openai" = API.
+# Default "local" avoids any OpenAI billing by design. On a low-RAM PC use the
+# small "tiny" or "base" size via WHISPER_MODEL_SIZE.
+WHISPER_BACKEND: str = os.environ.get("WHISPER_BACKEND", "local")
+WHISPER_MODEL_SIZE: str = os.environ.get("WHISPER_MODEL_SIZE", "small")
+# Analysis LLM: "gemini" (free Google AI Studio tier) or "openai".
+ANALYSIS_BACKEND: str = os.environ.get("ANALYSIS_BACKEND", "gemini")
+GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
 # --- Output / storage ---
 OUTPUT_DIR: Path = Path(os.environ.get("CLIPPER_OUTPUT_DIR", "./output"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

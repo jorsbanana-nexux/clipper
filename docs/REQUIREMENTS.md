@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-02 (verifikasi A/B 13/13 + buang dead code; + fix kritis POST /jobs event-loop)
+**Terakhir diperbarui:** 2026-09-02 (mode GRATIS: faster-whisper lokal + Gemini; + verifikasi A/B, fix event-loop, model valid)
 
 ---
 
@@ -114,8 +114,8 @@ Prinsip: **"editor profesional, bukan clipper otonom yang kaku."**
 |---------|-----------|
 | Backend | Python 3.11, FastAPI, uvicorn |
 | Download | yt-dlp |
-| Transkripsi | OpenAI Whisper (`whisper-1`, word timestamps) |
-| Analisis | OpenAI GPT (`gpt-4o-mini`, structured output) |
+| Transkripsi | **faster-whisper lokal** (gratis, default) / OpenAI Whisper (`whisper-1`) |
+| Analisis | **Gemini** (gratis, default) / OpenAI GPT (`gpt-4o-mini`, structured output) |
 | Video | ffmpeg 7.x, OpenCV, MediaPipe |
 | Frontend | Next.js 15 (App Router), React 19 |
 | Storage | Lokal `./output` (v0.1) → S3/Redis (v1.0) |

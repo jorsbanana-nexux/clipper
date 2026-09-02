@@ -102,7 +102,44 @@ def _split_audio(audio_path: str, chunk_sec: float, tmp_dir: str) -> list[str]:
     return sorted(str(p) for p in Path(tmp_dir).glob(f"chunk_*{src_ext}"))
 
 
+def _transcribe_local(audio_path: str, language: str | None) -> dict:
+    """Free local transcription via faster-whisper (0 OpenAI cost).
+
+    faster-whisper is the same engine WhisperX uses for transcription; it gives
+    word-level timestamps locally. Runs on CPU (compute_type=int8) so it works
+    on low-RAM laptops. Model size via WHISPER_MODEL_SIZE (small/tiny/base).
+    """
+    from faster_whisper import WhisperModel
+
+    size = getattr(config, "WHISPER_MODEL_SIZE", "small")
+    model = WhisperModel(size, device="cpu", compute_type="int8")
+    segments_iter, info = model.transcribe(
+        audio_path, language=language, word_timestamps=True, vad_filter=True)
+
+    words: list[dict] = []
+    segments: list[dict] = []
+    text_parts: list[str] = []
+    for s in segments_iter:
+        t = (s.text or "").strip()
+        if t:
+            text_parts.append(t)
+        segments.append({"start": float(s.start), "end": float(s.end), "text": t})
+        for w in (s.words or []):
+            wd = (w.word or "").strip()
+            if wd:
+                words.append({"word": wd, "start": float(w.start), "end": float(w.end)})
+    return {
+        "text": " ".join(text_parts),
+        "words": words,
+        "segments": segments,
+        "language": getattr(info, "language", None),
+    }
+
+
 def transcribe(audio_path: str, language: str | None = None) -> dict:
+    if getattr(config, "WHISPER_BACKEND", "local") == "local":
+        return _transcribe_local(audio_path, language)
+
     if not config.OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not set. Provide it via environment.")
 

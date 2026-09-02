@@ -1,0 +1,19 @@
+# OPSIONAL — FREE backend (tanpa biaya OpenAI).
+#
+# Pasang ini untuk menjalankan Clipper TANPA biaya API:
+#   - faster-whisper  : transkripsi LOKAL di PC Anda (0 rupiah), word timestamps.
+#   - google-generativeai : analisis momen viral via Gemini (Google AI Studio,
+#                           pakai API key GRATIS, tanpa kartu).
+#
+#   pip install -r requirements-free.txt
+#
+# Konfigurasi (.env):
+#   WHISPER_BACKEND=local        # default: local (faster-whisper)
+#   WHISPER_MODEL_SIZE=small     # kecil/tiny/base untuk PC low-RAM
+#   ANALYSIS_BACKEND=gemini      # default: gemini (gratis)
+#   GEMINI_API_KEY=...           # ambil gratis di https://aistudio.google.com/apikey
+#
+# Alternatif berbayar (jika mau pakai OpenAI lagi):
+#   WHISPER_BACKEND=openai  +  ANALYSIS_BACKEND=openai  +  OPENAI_API_KEY=sk-...
+faster-whisper>=1.0.0
+google-generativeai>=0.7.0

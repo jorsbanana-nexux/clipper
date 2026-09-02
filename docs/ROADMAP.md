@@ -369,3 +369,19 @@ Semua klaim "selesai/berfungsi" di Fase A (A1-A7) & Fase B (B1-B5) **diuji nyata
   (bukan key asli) — jangan dikira key Anda. Key asli user = `sk-...` di `.env`.
 - **Satu-satunya yang belum bisa diuji di sandbox**: unduhan + captions YouTube
   (IP datacenter diblokir). Harus diuji dari PC rumahan (Fase A0).
+
+## 6j. Mode GRATIS — faster-whisper lokal + Gemini (2026-09-02)
+
+Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):
+- **Transkripsi**: `WHISPER_BACKEND=local` memakai **faster-whisper** (mesin yang
+  dipakai WhisperX) jalan di PC sendiri, 0 rupiah, word timestamps. Ukuran model
+  `WHISPER_MODEL_SIZE` (small/tiny/base).
+- **Analisis**: `ANALYSIS_BACKEND=gemini` memakai **Google Gemini** (Google AI
+  Studio, API key GRATIS tanpa kartu).
+- Konfigurasi default sekarang **gratis** (`WHISPER_BACKEND=local`,
+  `ANALYSIS_BACKEND=gemini`). OpenAI tetap didukung via `=openai`.
+- `/health` kini melaporkan `whisper_backend`, `analysis_backend`, `analysis_ready`
+  (bukan lagi wajib `openai_key`). Guard `/jobs` menyesuaikan backend terpilih.
+- Deps baru: `requirements-free.txt` (faster-whisper, google-generativeai).
+- Terverifikasi di sandbox: faster-whisper lokal load model (tiny) & transkrip
+  tanpa error. Live panggilan Gemini butuh key gratis Anda (belum diuji sandbox).
