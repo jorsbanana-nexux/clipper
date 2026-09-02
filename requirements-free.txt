@@ -12,8 +12,9 @@
 #   WHISPER_MODEL_SIZE=small     # kecil/tiny/base untuk PC low-RAM
 #   ANALYSIS_BACKEND=gemini      # default: gemini (gratis)
 #   GEMINI_API_KEY=...           # ambil gratis di https://aistudio.google.com/apikey
+#   GEMINI_MODEL=gemini-3.5-flash # model Gemini saat ini (2.x/1.5 sudah dihapus Google)
 #
 # Alternatif berbayar (jika mau pakai OpenAI lagi):
 #   WHISPER_BACKEND=openai  +  ANALYSIS_BACKEND=openai  +  OPENAI_API_KEY=sk-...
 faster-whisper>=1.0.0
-google-generativeai>=0.7.0
+google-genai>=2.0.0

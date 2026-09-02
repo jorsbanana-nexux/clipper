@@ -78,26 +78,39 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
 
 
 def _analyze_gemini(prompt: str) -> HighlightAnalysis:
-    """Free Google AI Studio (Gemini) backend — needs GEMINI_API_KEY."""
+    """Free Google AI Studio (Gemini) backend — needs GEMINI_API_KEY.
+
+    Uses the modern `google-genai` SDK with `response_schema=HighlightAnalysis`
+    (mirrors OpenAI structured output). Older `gemini-2.x`/`1.5` models are
+    deprecated; use a current model such as gemini-3.5-flash (see GEMINI_MODEL).
+    """
     if not config.GEMINI_API_KEY:
         raise RuntimeError(
             "ANALYSIS_BACKEND=gemini but GEMINI_API_KEY is empty. "
             "Get a free key at https://aistudio.google.com/apikey and set it in .env "
             "(or set ANALYSIS_BACKEND=openai to use OpenAI).")
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError:
         raise RuntimeError(
-            "google-generativeai not installed. Run: pip install google-generativeai")
+            "google-genai not installed. Run: pip install -U google-genai")
 
-    genai.configure(api_key=config.GEMINI_API_KEY)
-    model = genai.GenerativeModel(config.GEMINI_MODEL)
-    resp = model.generate_content(
-        prompt,
-        generation_config=genai.types.GenerationConfig(response_mime_type="application/json"),
+    client = genai.Client(api_key=config.GEMINI_API_KEY)
+    resp = client.models.generate_content(
+        model=config.GEMINI_MODEL,
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=HighlightAnalysis,
+            temperature=0.2,
+        ),
     )
+    # google-genai returns a typed object via `parsed`; fall back to text parse.
+    parsed = getattr(resp, "parsed", None)
+    if parsed is not None:
+        return parsed
     raw = getattr(resp, "text", "") or ""
-    # strip markdown fences if the model wraps JSON in them
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.strip("`")

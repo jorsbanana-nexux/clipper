@@ -370,7 +370,23 @@ Semua klaim "selesai/berfungsi" di Fase A (A1-A7) & Fase B (B1-B5) **diuji nyata
 - **Satu-satunya yang belum bisa diuji di sandbox**: unduhan + captions YouTube
   (IP datacenter diblokir). Harus diuji dari PC rumahan (Fase A0).
 
-## 6j. Mode GRATIS — faster-whisper lokal + Gemini (2026-09-02)
+## 6j. Uji key Gemini asli + fix model deprecated (2026-09-02)
+
+- **Temuan**: model Gemini lama (`gemini-2.0-flash`, `2.5-flash`, `1.5-flash`)
+  **sudah dihapus Google** → `404 NOT_FOUND`. Analisis gagal walau key benar.
+- **Fix**: default `GEMINI_MODEL` → `gemini-3.5-flash` (valid saat ini; alternatif:
+  `gemini-3.6-flash`, `gemini-flash-latest`, `gemini-3.1-flash-lite`).
+- **Fix SDK**: `analyzer._analyze_gemini` pindah ke SDK modern **`google-genai`**
+  dengan `response_schema=HighlightAnalysis` (mirror structured output OpenAI),
+  menggantikan `google.generativeai` (deprecated).
+- **Deps**: `requirements-free.txt` → `google-genai>=2.0.0` (bukan google-generativeai).
+- **Uji nyata dengan key Google AI Studio**: `find_viral_moments` memanggil
+  `gemini-3.5-flash` dan **berhasil mengembalikan JSON valid** → ter-parse ke
+  `HighlightAnalysis` (timestamp, skor viral, judul clip). Verifikasi A/B 13/13 PASS.
+- Key user **tidak pernah dicetak**; dipakai via env var. Gunakan UI `request_user_secret`
+  untuk key baru.
+
+## 6k. Mode GRATIS — faster-whisper lokal + Gemini (2026-09-02)
 
 Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):
 - **Transkripsi**: `WHISPER_BACKEND=local` memakai **faster-whisper** (mesin yang

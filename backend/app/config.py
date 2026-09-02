@@ -35,7 +35,8 @@ WHISPER_MODEL_SIZE: str = os.environ.get("WHISPER_MODEL_SIZE", "small")
 # Analysis LLM: "gemini" (free Google AI Studio tier) or "openai".
 ANALYSIS_BACKEND: str = os.environ.get("ANALYSIS_BACKEND", "gemini")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# Current, non-deprecated Gemini model (gemini-2.x/1.5 are removed/404).
+GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
 # --- Output / storage ---
 OUTPUT_DIR: Path = Path(os.environ.get("CLIPPER_OUTPUT_DIR", "./output"))
