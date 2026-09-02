@@ -89,30 +89,40 @@ clipper/
 
 ## 🚀 Menjalankan Secara Lokal
 
-> **Semua OS (disarankan):** jalankan [`setup.py`](setup.py) sekali — ia meminta
+> **Semua OS — satu perintah:**
+>
+> ```
+> python setup.py
+> ```
+>
+> Script ini **otomatis**: **(1)** buat `.venv` Python 3.11, **(2)** install semua
+> Python deps, **(3)** `npm install` frontend, **(4)** tanya
 > `OPENAI_API_KEY` (**WAJIB**, diketik tersembunyi) dan `HUGGINGFACE_TOKEN`
-> (opsional → multi-speaker; ketik `off` = matikan), menulis `.env`, lalu otomatis
-> menjalankan backend + frontend + membuka browser `http://localhost:3000`.
-> Cek status key via `GET /health`.
+> (opsional; ketik `off` = matikan), simpan `.env`, jalankan backend +
+> frontend + buka browser. Jalankan lagi kapan saja untuk ganti key.
 >
 > **Manual:** salin [`.env.example`](.env.example) → `.env`, isi `OPENAI_API_KEY=sk-...`,
-> lalu jalankan backend & frontend seperti langkah di bawah.
+> lalu jalankan backend via `.venv` dan frontend via `npm run dev`.
 
 
 
 ### Prasyarat
-- **Python 3.11** dan **ffmpeg** terpasang (`ffmpeg -version`).
-- **Node.js 18+** untuk frontend.
-- **`OPENAI_API_KEY`** (untuk Whisper + GPT analisis).
+- **Python 3.11** terpasang (cek: `py -0`).
+- **ffmpeg** terpasang dan ada di PATH (cek: `ffmpeg -version`).
+- **Node.js 18+** dan **npm** terpasang (cek: `node -v`).
+- **`OPENAI_API_KEY`** dari [platform.openai.com](https://platform.openai.com/).
 
-### 1. Backend
+> `.venv` dan `node_modules` dibuat **otomatis** oleh `python setup.py`.
+
+### 1. Backend (manual)
 
 ```bash
-cd clipper
-pip install -r requirements.txt
-export OPENAI_API_KEY="sk-..."
-python backend/run.py
-# → http://localhost:8000  (health: /health)
+# Windows
+py -3.11 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+# (isi OPENAI_API_KEY di .env lebih dulu - salin dari .env.example)
+.venv\Scripts\python backend\run.py
+# → http://localhost:8000   (cek key: GET /health)
 ```
 
 ### 2. Frontend

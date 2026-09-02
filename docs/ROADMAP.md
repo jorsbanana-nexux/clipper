@@ -281,3 +281,17 @@ Membuat sistem tahan restart dan terukur.
 - **Manual fallback**: salin `.env.example` → `.env`, isi `OPENAI_API_KEY=...`.
 - **Pelajaran untuk agent**: jangan edit file `.bat` dari sandbox Linux tanpa menormalkan
   line-ending ke CRLF; jangan letakkan `&` mentah di `echo` batch. Gunakan `setup.py` (Python).
+
+---
+
+## 6e. setup.py full rewrite: venv + deps otomatis (2026-09-02)
+
+- `setup.py` dirombak menjadi satu perintah mandiri (`python setup.py`):
+  1. **Buat `.venv` Python 3.11** otomatis (Windows: `py -3.11 -m venv .venv`).
+  2. **Install Python deps** ke `.venv` (`pip install -r requirements.txt`; +multispeaker jika HF token ON).
+  3. **`npm install`** di `frontend/` (dilewati jika `node_modules` sudah ada).
+  4. **Tanya key** dengan `getpass` (tidak tercetak); simpan ke `.env` tanpa duplikat.
+  5. **Launch** backend via `.venv` Python + frontend via `npm run dev` + buka browser.
+- `.venv` dan `node_modules` tetap di `.gitignore` (tidak di-push; dibuat lokal).
+- Alur pengguna: clone → `python setup.py` → isi key → selesai.
+- Agent masa depan: `.venv` Python = `.venv/Scripts/python.exe` (Win) / `.venv/bin/python` (Unix).

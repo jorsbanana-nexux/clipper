@@ -3,7 +3,7 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-02 (setup.py ganti setup.py; A1 & A6 ter-wire penuh)
+**Terakhir diperbarui:** 2026-09-02 (setup.py full rewrite: venv + deps + launch otomatis)
 
 ---
 
@@ -184,7 +184,8 @@ Ringkas fase Mode 1:
 - **Auto-provision key**: `OPENAI_API_KEY` **wajib** diset pengguna (via `setup.py` sekali;
   key diketik tersembunyi, disimpan ke `.env`, dan ditampilkan "tersimpan" saat setup ulang — bisa diganti).
 - **Multi-speaker opsional**: `HUGGINGFACE_TOKEN` boleh kosong (OFF); isi = ON, `off` = matikan.
-- **setup.py mandiri**: set key (WAJIB) + HF token (opsional) + auto-start backend/frontend + buka browser.
+- **setup.py mandiri**: buat `.venv` Python 3.11 + install Python deps + npm install + set key
+  (WAJIB, tersembunyi) + HF token (opsional) + auto-start backend/frontend + buka browser.
   Diagnostik: `GET /health` menampilkan `openai_key` (set/missing).
 - **.env.example**: template manual — salin ke `.env`, isi `OPENAI_API_KEY`, tanpa perlu setup.py.
 - **YouTube memblokir IP datacenter** — uji end-to-end harus dari IP rumahan pengguna,
