@@ -101,9 +101,10 @@ Mengamankan fondasi sebelum nambah fitur.
 - [ ] **A0 — Uji end-to-end** ⏳ *checklist, belum dijalankan* — lihat `docs/TESTING.md`. Harus
       dijalankan di IP rumahan dengan `OPENAI_API_KEY` asli (sandbox tidak bisa: YouTube blokir IP
       datacenter). Mulai dari 1 video pendek (1–3 menit), lalu 1 podcast panjang (30–60 menit).
-- [x] **A1 — Potongan frame-accurate.** ✅ `CLIPPER_CUT_MODE=fast|accurate` kini dipakai di
-      `renderer.clip_segment` DAN fallback `downloader.download_full_and_cut` (`_ffmpeg_cut`);
+- [x] **A1 — Potongan frame-accurate.** ✅ `CLIPPER_CUT_MODE=fast|accurate` dipakai di
+      `downloader._ffmpeg_cut` (dipanggil lewat fallback `downloader.download_full_and_cut`);
       accurate = re-encode `-ss` sebelum `-i` (default) — batas clip presisi, bukan `-c copy`.
+      *(duplikat `renderer.clip_segment` yang tak pernah dipanggil sudah dibuang — lihat §6i)*.
 - [x] **A2 — Bundle font.** ✅ `subtitles.py` mendukung `CLIPPER_FONT_DIR` -> `fontsdir` ASS +
       resolve nama font vs file `.ttf/.otf`, fallback font sistem.
 - [x] **A3 — Verifikasi A/V & sinkron.** ✅ `renderer.verify_output` (ffprobe: cek stream video +
