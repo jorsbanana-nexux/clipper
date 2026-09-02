@@ -9,29 +9,6 @@ FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
 
 
-def clip_segment(video_path, start, end, out_path):
-    """Cut [start,end] of a clip.
-
-    CUT_MODE == "fast"     -> stream copy (fast, keyframe-aligned, ~2-5s slop).
-    CUT_MODE == "accurate" -> re-encode with -ss before -i (frame-accurate).
-    """
-    dur = end - start
-    if getattr(config, "CUT_MODE", "accurate") == "fast":
-        cmd = [
-            FFMPEG, "-ss", str(start), "-t", str(dur), "-i", video_path,
-            "-c", "copy", "-avoid_negative_ts", "make_zero", "-y", out_path,
-        ]
-    else:
-        # Accurate: input seek (before -i) + re-encode -> frame-accurate cut.
-        cmd = [
-            FFMPEG, "-ss", str(start), "-t", str(dur), "-i", video_path,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
-            "-c:a", "aac", "-avoid_negative_ts", "make_zero", "-y", out_path,
-        ]
-    subprocess.run(cmd, check=True, capture_output=True)
-    return out_path
-
-
 def burn_subtitles_and_effects(video_path, ass_path, out_path):
     vf = (
         f"ass={ass_path},"

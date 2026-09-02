@@ -58,11 +58,6 @@ def _quiet_opts(extra: dict) -> dict:
     return opts
 
 
-def extract_metadata(url: str) -> dict:
-    with yt_dlp.YoutubeDL(_quiet_opts({"skip_download": True})) as ydl:
-        return ydl.extract_info(url, download=False)
-
-
 def download_audio_only(url: str, out_dir: str) -> tuple[str, dict]:
     """Download only the audio track (mp3) + return (path, info_dict)."""
     os.makedirs(out_dir, exist_ok=True)

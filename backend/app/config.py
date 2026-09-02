@@ -45,7 +45,6 @@ CORS_ORIGINS: list[str] = [
 ]
 
 # --- Clip defaults ---
-DEFAULT_MAX_CLIPS: int = int(os.environ.get("CLIPPER_MAX_CLIPS", "8"))
 MIN_CLIP_SEC: float = float(os.environ.get("CLIPPER_MIN_CLIP_SEC", "20"))
 MAX_CLIP_SEC: float = float(os.environ.get("CLIPPER_MAX_CLIP_SEC", "75"))
 # Padding (seconds) added before/after each clip so the moment is never cut off

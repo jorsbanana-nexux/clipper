@@ -350,3 +350,21 @@ Semua 13 modul backend tetap lolos `py_compile` setelah perubahan ini.
 - **Pelajaran**: endpoint FastAPI yang menjadwalkan task asyncio (via
   `asyncio.create_task`) HARUS `async def`; fungsi sync di threadpool tidak punya
   event loop.
+
+## 6i. Verifikasi A/B + buang dead code (2026-09-02)
+
+Semua klaim "selesai/berfungsi" di Fase A (A1-A7) & Fase B (B1-B5) **diuji nyata
+  dengan video sintetis + ffmpeg + ffprobe** — 13/13 PASS:
+  A1 cut accurate (2.08s utk 2.0s) & fast; A2 fontsdir line + ffmpeg burn OK;
+  A3 tolak no-audio; A4 parser caption + normalisasi lang; A5 retries/cookies/
+  proxy; A6 Semaphore (MAX_PARALLEL=1); A7 cleanup retention; B1 diarization
+  gated aman; B2 analisis pakai turns; B3 multi-face; B4 split-screen duo;
+  B5 dynamic switching single→duo (video+audio sinkron).
+- **Dead code dibuang**: `renderer.clip_segment` (duplikat `_ffmpeg_cut`, tak
+  pernah dipanggil pipeline), `downloader.extract_metadata` (tak pernah dipanggil),
+  `config.DEFAULT_MAX_CLIPS` (0 referensi). `LAYOUT_SHARE` & `mode="keyword"`
+  dipertahankan sebagai template/mode ter-reserve (dokumentasi).
+- **Catatan**: sandbox punya `OPENAI_API_KEY` env berisi placeholder `cf-...`
+  (bukan key asli) — jangan dikira key Anda. Key asli user = `sk-...` di `.env`.
+- **Satu-satunya yang belum bisa diuji di sandbox**: unduhan + captions YouTube
+  (IP datacenter diblokir). Harus diuji dari PC rumahan (Fase A0).
