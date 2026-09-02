@@ -21,6 +21,28 @@ from . import config
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 
 
+def _ffmpeg_cut(src: str, start: float, end: float, out: str) -> str:
+    """Cut [start, end] honoring config.CUT_MODE (A1).
+
+    "accurate" -> re-encode with -ss before -i (frame-accurate, default).
+    "fast"     -> stream copy (keyframe-aligned, faster, ~2-5s slop).
+    """
+    dur = end - start
+    if getattr(config, "CUT_MODE", "accurate") == "fast":
+        cmd = [
+            FFMPEG, "-ss", str(start), "-t", str(dur), "-i", src,
+            "-c", "copy", "-avoid_negative_ts", "make_zero", "-y", out,
+        ]
+    else:
+        cmd = [
+            FFMPEG, "-ss", str(start), "-t", str(dur), "-i", src,
+            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            "-c:a", "aac", "-avoid_negative_ts", "make_zero", "-y", out,
+        ]
+    subprocess.run(cmd, check=True, capture_output=True)
+    return out
+
+
 def _quiet_opts(extra: dict) -> dict:
     opts = {
         "quiet": True,
@@ -101,11 +123,7 @@ def download_full_and_cut(url: str, start: float, end: float, out_dir: str) -> s
         raise RuntimeError("Full video download produced no usable file")
     full = fulls[0]
     cut = os.path.join(out_dir, "cut.mp4")
-    dur = end - start
-    subprocess.run([
-        FFMPEG, "-ss", str(start), "-t", str(dur), "-i", str(full),
-        "-c", "copy", "-avoid_negative_ts", "make_zero", "-y", cut,
-    ], check=True, capture_output=True)
+    _ffmpeg_cut(str(full), start, end, cut)
     return cut
 
 

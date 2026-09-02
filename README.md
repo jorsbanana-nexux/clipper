@@ -87,10 +87,10 @@ clipper/
 
 ## 🚀 Menjalankan Secara Lokal
 
-    > **Windows:** jalankan [`setup.bat`](setup.bat) untuk menyetel `OPENAI_API_KEY`
-    > dan `HUGGINGFACE_TOKEN` (disimpan ke `.env`), lalu mulai backend
-    > (`python backend/run.py`) dan frontend (`cd frontend && npm install && npm run dev`)
-    > di dua terminal terpisah &mdash; buka `http://localhost:3000`.
+> **Windows (disarankan):** jalankan [`setup.bat`](setup.bat) sekali — ia meminta
+> `OPENAI_API_KEY` (**WAJIB**) dan `HUGGINGFACE_TOKEN` (opsional, untuk multi-speaker),
+> menyimpannya ke `.env`, lalu otomatis menjalankan backend + frontend dan membuka
+> browser `http://localhost:3000`. Cek status key kapan saja via `GET /health`.
 
 
 

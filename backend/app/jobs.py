@@ -72,6 +72,97 @@ def _cleanup_old_jobs() -> None:
                 continue
 
 
+async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, full_words, work_dir):
+    """Render a single clip end-to-end. Returns a ClipInfo, or raises on error."""
+    pad = config.PADDING_SEC
+    padded_start = max(0.0, hl.start_time - pad)
+    padded_end = hl.end_time + pad
+
+    seg_dir = work_dir / f"clip_{index}"
+    seg_dir.mkdir(exist_ok=True)
+
+    raw_path = await asyncio.to_thread(
+        downloader.download_segment, url, padded_start, padded_end, str(seg_dir))
+
+    local_words: list[dict] = []
+    aseg: str | None = None
+    if used_captions:
+        try:
+            aseg = await asyncio.to_thread(
+                downloader.download_audio_segment, url, padded_start, padded_end, str(seg_dir))
+            t = await asyncio.to_thread(transcriber.transcribe, aseg, caption_lang)
+            local_words = transcriber.words_from_transcript(t)
+        except Exception as e:
+            job.update(message=f"clip {index}: audio segment Whisper failed ({e}); subtitle skipped")
+    else:
+        local_words = [
+            {**w, "start": w["start"] - padded_start, "end": w["end"] - padded_start}
+            for w in full_words
+            if w["end"] >= padded_start and w["start"] <= padded_end
+        ]
+
+    turns: list[dict] = []
+    if diarization.diarization_available():
+        try:
+            diar_audio = str(seg_dir / "diar_audio.wav")
+            diar_src = aseg if aseg else raw_path
+            await asyncio.to_thread(renderer.cut_audio, diar_src, 0.0, padded_end - padded_start, diar_audio)
+            turns = await asyncio.to_thread(diarization.diarize, diar_audio)
+        except Exception:
+            turns = []
+
+    if config.LAYOUT_MODE in ("single", "duo"):
+        clip_layout = config.LAYOUT_MODE
+        timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
+    elif turns:
+        abs_timeline = layout.layout_timeline(turns, hl.start_time, hl.end_time)
+        timeline = compositor.rel_timeline(abs_timeline, padded_start)
+        timeline = [s for s in timeline if s["end"] > s["start"]]
+    else:
+        clip_layout = layout.choose_template([], 0.0, 0.0)
+        timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
+
+    vertical = str(seg_dir / "vertical.mp4")
+    distinct = {s.get("layout") for s in timeline}
+    if len(timeline) > 1 and len(distinct) > 1:
+        await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
+    elif timeline and timeline[0].get("layout") == "duo":
+        await asyncio.to_thread(face_tracker.reframe_duo, raw_path, vertical)
+    else:
+        samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
+        await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
+
+    ass_path = str(seg_dir / "subs.ass")
+    if local_words:
+        ass_content = subtitles.words_to_ass(local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT)
+        Path(ass_path).write_text(ass_content, encoding="utf-8")
+
+    final = str(seg_dir / "final.mp4")
+    if local_words:
+        await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
+    else:
+        shutil.copy(vertical, final)
+
+    await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
+
+    thumb = str(seg_dir / "thumb.jpg")
+    await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
+
+    rel = f"/clips/{job.job_id}/clip_{index}/final.mp4"
+    return ClipInfo(
+        index=index,
+        title=hl.title,
+        start_time=hl.start_time,
+        end_time=hl.end_time,
+        duration=round(hl.end_time - hl.start_time, 2),
+        viral_score=hl.viral_score,
+        reason=hl.reason,
+        hook=hl.hook,
+        download_url=rel,
+        filename=f"{job.job_id}_clip_{index}.mp4",
+    )
+
+
 async def _run_pipeline(job: Job, request) -> None:
     work_dir = config.OUTPUT_DIR / job.job_id
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -121,117 +212,30 @@ async def _run_pipeline(job: Job, request) -> None:
         )
         highlights = analysis.highlights[:request.max_clips]
 
-        # ---- 3. render each clip ----
+        # ---- 3. render each clip (bounded by CLIPPER_MAX_PARALLEL) ----
         total = max(1, len(highlights))
-        clips = []
-        for i, hl in enumerate(highlights):
-            if job._cancel:
-                break
-            frac = 0.45 + 0.55 * (i / total)
-            job.update(status="rendering", stage=f"render_{i+1}", progress=frac,
-                       message=f"Rendering clip {i+1}/{total}: {hl.title}")
+        sem = asyncio.Semaphore(max(1, config.MAX_PARALLEL))
+        done = 0
+        lock = asyncio.Lock()
 
-            # Pad the moment so it's never cut off even if timestamps drift ~1-2s.
-            pad = config.PADDING_SEC
-            padded_start = max(0.0, hl.start_time - pad)
-            padded_end = hl.end_time + pad
+        async def render_worker(i: int, hl):
+            nonlocal done
+            async with sem:
+                if job._cancel:
+                    return None
+                job.update(status="rendering", stage=f"render_{i + 1}",
+                           message=f"Rendering clip {i + 1}/{total}: {hl.title}")
+                clip = await _render_one_clip(
+                    job, request.url, hl, i + 1,
+                    used_captions, caption_lang, full_words, work_dir)
+                async with lock:
+                    done += 1
+                    job.update(progress=0.45 + 0.55 * (done / total),
+                               message=f"Rendered {done}/{total} clips")
+                return clip
 
-            seg_dir = work_dir / f"clip_{i+1}"
-            seg_dir.mkdir(exist_ok=True)
-
-            # download only this (padded) video segment
-            raw_path = await asyncio.to_thread(
-                downloader.download_segment, request.url, padded_start, padded_end, str(seg_dir))
-
-            # words for this clip:
-            #   captions path -> download only this (padded) audio segment + Whisper (accurate word timing)
-            #   fallback path -> reuse full-transcript words (already have them)
-            local_words: list[dict] = []
-            aseg: str | None = None
-            if used_captions:
-                try:
-                    aseg = await asyncio.to_thread(
-                        downloader.download_audio_segment, request.url, padded_start, padded_end, str(seg_dir))
-                    t = await asyncio.to_thread(transcriber.transcribe, aseg, caption_lang)
-                    local_words = transcriber.words_from_transcript(t)
-                except Exception as e:
-                    job.update(message=f"clip {i+1}: audio segment Whisper failed ({e}); subtitle skipped")
-            else:
-                local_words = [
-                    {**w, "start": w["start"] - padded_start, "end": w["end"] - padded_start}
-                    for w in full_words
-                    if w["end"] >= padded_start and w["start"] <= padded_end
-                ]
-
-            # --- v0.2 multi-speaker: decide single vs duo via diarization (optional) ---
-            turns: list[dict] = []
-            if diarization.diarization_available():
-                try:
-                    # aseg is the short clip audio (captions path, 0-bound timestamps).
-                    # raw_path is the padded video segment — always present. Convert the
-                    # segment to 16 kHz mono WAV before diarization. Only operate on the
-                    # short per-clip segment so it stays light.
-                    diar_audio = str(seg_dir / "diar_audio.wav")
-                    diar_src = aseg if aseg else raw_path
-                    await asyncio.to_thread(renderer.cut_audio, diar_src, 0.0, padded_end - padded_start, diar_audio)
-                    turns = await asyncio.to_thread(diarization.diarize, diar_audio)
-                except Exception:
-                    turns = []
-            # ---- B5 dynamic switching: build a clip-relative layout timeline ----
-            if config.LAYOUT_MODE in ("single", "duo"):
-                clip_layout = config.LAYOUT_MODE
-                timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
-            elif turns:
-                # absolute-turn timeline -> clip-relative -> per-segment layouts
-                abs_timeline = layout.layout_timeline(turns, hl.start_time, hl.end_time)
-                timeline = compositor.rel_timeline(abs_timeline, padded_start)
-                timeline = [s for s in timeline if s["end"] > s["start"]]
-            else:
-                clip_layout = layout.choose_template([], 0.0, 0.0)
-                timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
-
-            # reframe to 9:16 (single crop-follow OR duo split-screen OR dynamic mix)
-            vertical = str(seg_dir / "vertical.mp4")
-            distinct = {s.get("layout") for s in timeline}
-            if len(timeline) > 1 and len(distinct) > 1:
-                await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
-            elif timeline and timeline[0].get("layout") == "duo":
-                await asyncio.to_thread(face_tracker.reframe_duo, raw_path, vertical)
-            else:
-                samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
-                await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
-
-            # word-by-word subtitles + effects
-            ass_path = str(seg_dir / "subs.ass")
-            if local_words:
-                ass_content = subtitles.words_to_ass(local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT)
-                Path(ass_path).write_text(ass_content, encoding="utf-8")
-
-            final = str(seg_dir / "final.mp4")
-            if local_words:
-                await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
-            else:
-                shutil.copy(vertical, final)
-
-            # A3: verify A/V + duration before declaring the clip ready
-            await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
-
-            thumb = str(seg_dir / "thumb.jpg")
-            await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
-
-            rel = f"/clips/{job.job_id}/clip_{i+1}/final.mp4"
-            clips.append(ClipInfo(
-                index=i + 1,
-                title=hl.title,
-                start_time=hl.start_time,
-                end_time=hl.end_time,
-                duration=round(hl.end_time - hl.start_time, 2),
-                viral_score=hl.viral_score,
-                reason=hl.reason,
-                hook=hl.hook,
-                download_url=rel,
-                filename=f"{job.job_id}_clip_{i+1}.mp4",
-            ))
+        rendered = await asyncio.gather(*(render_worker(i, hl) for i, hl in enumerate(highlights)))
+        clips = [c for c in rendered if c is not None]
 
         job.update(status="done", stage="done", progress=1.0,
                    message=f"Ready: {len(clips)} clips", clips=clips)

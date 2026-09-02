@@ -31,13 +31,19 @@ app.mount("/clips", StaticFiles(directory=str(config.OUTPUT_DIR)), name="clips")
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "ffmpeg": bool(shutil.which("ffmpeg"))}
+    key_set = bool(config.OPENAI_API_KEY)
+    return {
+        "status": "ok",
+        "ffmpeg": bool(shutil.which("ffmpeg")),
+        "openai_key": "set" if key_set else "missing",
+        "multi_speaker": bool(config.MULTI_SPEAKER and config.HUGGINGFACE_TOKEN),
+    }
 
 
 @app.post("/jobs", response_model=JobStatus)
 def create_job(request: ClipRequest):
     if not config.OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured on the server.")
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY belum diset. Jalankan setup.bat lalu restart backend (cek GET /health).")
     job = manager.create()
     manager.start(job, request)
     return job.status

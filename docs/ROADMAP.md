@@ -68,7 +68,7 @@ detection, crop-follow 9:16 mux audio, parser VTT/SRT, ASS word-by-word, auto-ch
 | # | Gap / Bug | Dampak | Diperbaiki di fase |
 |---|-----------|--------|-------------------|
 | 1 | **Belum pernah uji end-to-end** (YouTube blokir IP sandbox + butuh `OPENAI_API_KEY` pengguna) | Risiko bug tersembunyi di integrasi nyata | A0 |
-| 2 | Potongan `-c copy` menempel ke **keyframe** (bisa geser ~2–5 detik); padding 1,5s hanya menutupi sebagian | Batas clip bisa kurang presisi | A1 |
+| 2 | ~~Potongan `-c copy` menempel ke **keyframe**~~ — diperbaiki A1 (`_ffmpeg_cut` re-encode) | Batas clip presisi (accurate default) | A1 ✅ |
 | 3 | Font "Montserrat" hanya disebut **nama** — kalau font tidak terpasang di host, ffmpeg pakai font default | Subtitle bisa jelek/tidak konsisten | A2 |
 | 4 | Captions-first hanya prioritaskan **English** (`startswith("en")`); auto-detect bahasa lain belum | Video non-Inggris bisa salah pilih caption | A4 |
 | 5 | Belum ada **speaker diarization** (siapa yang bicara) | Tidak bisa label pembicara | B1 |
@@ -101,8 +101,9 @@ Mengamankan fondasi sebelum nambah fitur.
 - [ ] **A0 — Uji end-to-end** ⏳ *checklist, belum dijalankan* — lihat `docs/TESTING.md`. Harus
       dijalankan di IP rumahan dengan `OPENAI_API_KEY` asli (sandbox tidak bisa: YouTube blokir IP
       datacenter). Mulai dari 1 video pendek (1–3 menit), lalu 1 podcast panjang (30–60 menit).
-- [x] **A1 — Potongan frame-accurate.** ✅ Tambah opsi `CLIPPER_CUT_MODE=fast|accurate` di
-      `renderer.clip_segment` (accurate = re-encode `-ss` sebelum `-i`; default).
+- [x] **A1 — Potongan frame-accurate.** ✅ `CLIPPER_CUT_MODE=fast|accurate` kini dipakai di
+      `renderer.clip_segment` DAN fallback `downloader.download_full_and_cut` (`_ffmpeg_cut`);
+      accurate = re-encode `-ss` sebelum `-i` (default) — batas clip presisi, bukan `-c copy`.
 - [x] **A2 — Bundle font.** ✅ `subtitles.py` mendukung `CLIPPER_FONT_DIR` -> `fontsdir` ASS +
       resolve nama font vs file `.ttf/.otf`, fallback font sistem.
 - [x] **A3 — Verifikasi A/V & sinkron.** ✅ `renderer.verify_output` (ffprobe: cek stream video +
@@ -111,7 +112,8 @@ Mengamankan fondasi sebelum nambah fitur.
       mengembalikan `(segments, lang)`; `lang` diteruskan sebagai hint ke Whisper.
 - [x] **A5 — yt-dlp tangguh.** ✅ `YDL_COOKIES_FILE` (path, jangan tempel di chat), `YDL_PROXY`,
       `YDL_RETRIES` (default 3), retry + fallback format.
-- [x] **A6 — Batasi konkurensi.** ✅ `CLIPPER_MAX_PARALLEL=1` default (sequential, low-spec friendly).
+- [x] **A6 — Batasi konkurensi.** ✅ `CLIPPER_MAX_PARALLEL` kini benar-benar mengatur banyaknya
+      render antar-clip via `asyncio.Semaphore` (default 1 = sequential, low-spec friendly).
 - [x] **A7 — Cleanup & retention.** ✅ `_cleanup_old_jobs` + `CLIPPER_RETENTION_DAYS` (default 7).
 
 ---
@@ -255,3 +257,16 @@ Membuat sistem tahan restart dan terukur.
   tidak menghasilkan file (bukan `IndexError`).
 - Bersihkan dead code: `fill_note`, `transcript_text`, variabel `title` tak terpakai.
 - `README.md` + `setup.bat`: referensi `launcher.bat` (file sudah dihapus) diperbaiki.
+
+---
+
+## 6c. Rombak setup.bat + wire A1/A6 (2026-09-02)
+
+- `setup.bat` dirombak total menjadi satu launcher mandiri:
+  - `OPENAI_API_KEY` **WAJIB** (loop minta ulang bila kosong; tampil "tersimpan & terverifikasi").
+  - `HUGGINGFACE_TOKEN` **opsional** (Enter = pertahankan status; ketik token = ON; `off` = matikan).
+  - Simpan ke `.env` tanpa duplikat, lalu **auto-start** backend + frontend + buka browser.
+- `GET /health` kini menampilkan status `openai_key` (set/missing) & `multi_speaker`,
+  dan `/jobs` memberi pesan error yang jelas bila key belum diset.
+- A1 ter-wire penuh (`downloader._ffmpeg_cut` taat `CLIPPER_CUT_MODE`).
+- A6 aktif (`asyncio.Semaphore(CLIPPER_MAX_PARALLEL)` membatasi render antar-clip).
