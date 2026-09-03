@@ -100,4 +100,4 @@ YDL_PROXY: str = os.environ.get("YDL_PROXY", "")                 # e.g. http://1
 YDL_RETRIES: int = int(os.environ.get("YDL_RETRIES", "3"))
 
 # Clip rendering concurrency. Default 1 (sequential) = low-spec friendly.
-MAX_PARALLEL: int = int(os.environ.get("CLIPPER_MAX_PARALLEL", "1"))
+MAX_PARALLEL: int = int(os.environ.get("CLIPPER_MAX_PARALLEL", "3"))

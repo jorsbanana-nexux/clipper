@@ -427,3 +427,19 @@ Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):
 - Deps baru: `requirements-free.txt` (faster-whisper, google-generativeai).
 - Terverifikasi di sandbox: faster-whisper lokal load model (tiny) & transkrip
   tanpa error. Live panggilan Gemini butuh key gratis Anda (belum diuji sandbox).
+
+## 6m. Percepatan render paralel — CLIPPER_MAX_PARALLEL (2026-09-03)
+
+- **Akar keluhan "setengah jam"**: default `CLIPPER_MAX_PARALLEL=1` membuat semua
+  clip dirender SATU PER SATU (serial). Untuk N clip waktu ≈ N × waktu/clip.
+- **Fix**: default paralel dinaikkan `1` → `3`. Clip dirender bersamaan memakai
+  beberapa inti CPU; kerja berat (ffmpeg encode + faster-whisper) berjalan di
+  thread & subproses yang melepas GIL sehingga benar-benar paralel.
+  **Kualitas tidak berubah** — hanya memakai PC lebih efisien.
+- `.env.example` kini mendokumentasikan: `CLIPPER_MAX_PARALLEL` (naikkan 4-6 untuk
+  banyak clip, turunkan 1-2 bila RAM 8GB terasa berat) dan `CLIPPER_CUT_MODE`
+  (`fast` stream copy vs `accurate` re-encode).
+- Catatan jujur: target "10 clip dalam ~1 menit" seperti situs clipper cloud/GPU
+  TIDAK mungkin di laptop CPU 8GB lokal. Paralel + caption-first + fast-cut
+  menurunkannya drastis, tetapi untuk kecepatan kelas atas tetap butuh server
+  cloud (butuh modal). Verifikasi A/B 13/13 PASS.
