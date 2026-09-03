@@ -9,9 +9,19 @@ FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
 
 
+def _fpath(p: str) -> str:
+    """Normalise a filesystem path for embedding inside an ffmpeg filtergraph.
+
+    Backslash is an ESCAPE character in ffmpeg filter parsing, so a Windows path
+    like C:\\out\\clip\\subs.ass would have its backslashes stripped (file not
+    found). Forward slashes are accepted on Windows and fix the ass= lookup.
+    """
+    return p.replace("\\", "/")
+
+
 def burn_subtitles_and_effects(video_path, ass_path, out_path):
     vf = (
-        f"ass={ass_path},"
+        f"ass={_fpath(ass_path)},"
         f"eq=contrast=1.06:saturation=1.15:brightness=0.01,"
         f"unsharp=5:5:0.6:5:5:0.0"
     )

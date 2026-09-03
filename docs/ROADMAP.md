@@ -443,3 +443,19 @@ Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):
   TIDAK mungkin di laptop CPU 8GB lokal. Paralel + caption-first + fast-cut
   menurunkannya drastis, tetapi untuk kecepatan kelas atas tetap butuh server
   cloud (butuh modal). Verifikasi A/B 13/13 PASS.
+
+## 6n. FIX AKAR Windows: path backslash di filter ass= (2026-09-03)
+
+- **Gejala (Windows)**: `Semua clip gagal dirender` saat `burn_subtitles_and_effects`.
+  Error ffmpeg asli: `ass_read_file(...subs.ass): Cannot open file` — path
+  `output\23143a\clip_4\subs.ass` tampil tanpa backslash (`output23143a...`).
+- **Akar**: ffmpeg memperlakukan `\` sebagai karakter ESCAPE dalam parser filter.
+  Path Windows (backslash) yang disisipkan ke `ass=<path>` di-`-vf` jadi rusak →
+  file subtitle tak ketemu. Bug ini hanya muncul di Windows (tidak terlihat di
+  sandbox Linux).
+- **Fix**: `renderer._fpath()` mengganti `\` → `/` sebelum disisipkan ke filter
+  (ffmpeg menerima forward slash di Windows). Hanya `ass=` yang menyisipkan path
+  ke filter; filter lain (blur-pad, duo, crop) tak memakai path.
+- Plus: error render kini menampilkan penyebab asli (jenis + stderr ffmpeg + kode
+  keluar) lewat `jobs._brief_error` — bukan lagi pesan generik.
+- Verifikasi: `_fpath` benar, render-chain 6/6 OK, A/B 13/13 PASS.
