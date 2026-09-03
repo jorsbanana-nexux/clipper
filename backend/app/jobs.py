@@ -20,6 +20,23 @@ from . import config, downloader, transcriber, analyzer, subtitles, face_tracker
 from .models import ClipInfo, JobStatus
 
 
+def _brief_error(exc: BaseException) -> str:
+    """Short human-readable description of a render exception, including ffmpeg
+    stderr and return code when available."""
+    extra = ""
+    if hasattr(exc, "stderr") and exc.stderr:
+        try:
+            tail = exc.stderr
+            if isinstance(tail, bytes):
+                tail = tail.decode(errors="replace")
+            extra += f" | ffmpeg: {str(tail)[-500:]}"
+        except Exception:
+            pass
+    if hasattr(exc, "returncode") and exc.returncode is not None:
+        extra += f" (exit {exc.returncode})"
+    return f"[{type(exc).__name__}] {exc}{extra}"
+
+
 class Job:
     def __init__(self, job_id: str):
         self.job_id = job_id
@@ -254,16 +271,18 @@ async def _run_pipeline(job: Job, request) -> None:
         )
         clips: list = []
         failures = 0
+        error_detail = ""
         for c in rendered:
             if isinstance(c, BaseException):
                 failures += 1
+                error_detail = _brief_error(c)
                 continue
             if c is not None:
                 clips.append(c)
 
         if not clips:
-            raise RuntimeError(f"Semua {total} clip gagal dirender ({failures} error). "
-                               "Lihat log backend untuk detail.")
+            raise RuntimeError(
+                f"Semua {failures} clip gagal dirender. Penyebab: {error_detail or 'tidak diketahui'}")
         job.update(status="done", stage="done", progress=1.0,
                    message=f"Ready: {len(clips)} clips", clips=clips)
         _cleanup_old_jobs()
