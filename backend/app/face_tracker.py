@@ -57,12 +57,11 @@ def _make_haar_cascade():
         return None
 
 
-def _detect_faces_mediapipe(frame_bgr, det) -> list:
+def _detect_faces_mediapipe(frame_rgb, det) -> list:
     try:
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        res = det.process(rgb)
+        res = det.process(frame_rgb)
     except Exception:
-        return []  # OpenCV hiccup on a bad frame -> treat as no face
+        return []  # OpenCV/MediaPipe hiccup -> treat as no face
     if not res.detections:
         return []
     out = []
@@ -73,11 +72,11 @@ def _detect_faces_mediapipe(frame_bgr, det) -> list:
     return out
 
 
-def _detect_faces_haar(frame_bgr, casc) -> list:
+def _detect_faces_haar(frame_rgb, casc) -> list:
     try:
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        h, w = frame_bgr.shape[:2]
-        faces = casc.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
+        gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
+        h, w = frame_rgb.shape[:2]
+        faces = casc.detectMultiScale(gray, 1.1, 5, minSize=(20, 20))
     except Exception:
         return []
     out = []
@@ -110,42 +109,66 @@ def analyze_faces(video_path: str, sample_interval: float = 0.5) -> list[FaceSam
 
 
 def analyze_faces_all(video_path: str, sample_interval: float = 0.5) -> list[FrameFaces]:
-    """Return per-frame face detections (all faces) for multi-speaker layouts."""
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return []
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    step = max(1, int(fps * sample_interval))
+    """Detect faces on a sparse, downscaled frame stream from ffmpeg.
 
+    Decodes only a few fps at small resolution via system ffmpeg -> fast on CPU
+    and no cv2.VideoCapture (removes the slow full-frame loop AND the
+    'Unknown C++ exception from OpenCV' source). MediaPipe first, cv2 Haar
+    fallback on the same small frames. Normalised cx (0..1) is scale-invariant.
+    """
     mp_det = _make_mediapipe_detector()
     haar_casc = _make_haar_cascade()
-
     frames: list[FrameFaces] = []
-    idx = 0
+
+    W, H = _probe_dims(video_path)
+    if W <= 0 or H <= 0:
+        return []
+    out_fps = 1.0 / max(0.1, sample_interval)   # e.g. 2 fps
+    scale = min(1.0, 640.0 / max(W, 1))
+    dw = max(2, int(W * scale))
+    dh = max(2, int(H * scale))
+    vf = f"scale={dw}:{dh},fps={out_fps}"
+    frame_bytes = dw * dh * 3
+
+    proc = None
     try:
+        proc = subprocess.Popen(
+            [FFMPEG, "-v", "error", "-i", video_path, "-vf", vf,
+             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+        idx = 0
         while True:
             try:
-                ok, frame = cap.read()
+                raw = proc.stdout.read(frame_bytes)
             except Exception:
-                ok, frame = False, None
-            if not ok or frame is None:
+                raw = None
+            if not raw or len(raw) < frame_bytes:
                 break
-            if idx % step == 0:
-                t = idx / fps
-                try:
-                    faces = _detect_faces_mediapipe(frame, mp_det) if mp_det is not None else []
-                    if not faces and haar_casc is not None:
-                        faces = _detect_faces_haar(frame, haar_casc)
-                except Exception:
-                    faces = []  # any OpenCV/MediaPipe failure on this frame -> skip
-                if faces:
-                    dets = _sort_faces(faces)
-                    for d in dets:
-                        d.t = t
-                    frames.append(FrameFaces(t=t, faces=dets))
+            frame = np.frombuffer(raw, np.uint8).reshape((dh, dw, 3))
+            t = idx / out_fps
+            try:
+                faces = _detect_faces_mediapipe(frame, mp_det) if mp_det is not None else []
+                if not faces and haar_casc is not None:
+                    faces = _detect_faces_haar(frame, haar_casc)
+            except Exception:
+                faces = []  # any detection failure on this frame -> skip
+            if faces:
+                dets = _sort_faces(faces)
+                for d in dets:
+                    d.t = t
+                frames.append(FrameFaces(t=t, faces=dets))
             idx += 1
+    except Exception:
+        frames = []
     finally:
-        cap.release()
+        if proc is not None:
+            try:
+                if proc.stdout is not None:
+                    proc.stdout.close()
+                proc.kill()
+            except Exception:
+                pass
         try:
             if mp_det is not None:
                 mp_det.close()

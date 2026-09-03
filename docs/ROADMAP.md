@@ -404,6 +404,12 @@ Semua klaim "selesai/berfungsi" di Fase A (A1-A7) & Fase B (B1-B5) **diuji nyata
 - **Indikator loading diperbaiki**: progress bar kini maju di AWAL tiap clip
   (`0.45+0.55*i/total`) plus sub-stage `reframe`/`subs` di dalam render clip,
   jadi tidak lagi terasa beku di 35%.
+- **Kecepatan deteksi wajah**: `analyze_faces_all` tidak lagi decode semua frame
+  via `cv2.VideoCapture` (lambat di CPU 8GB + sumber crash). Kini memakai
+  ffmpeg pipe dengan resolusi kecil (max 640px) & fps rendah (~2 fps) — jauh
+  lebih cepat dan bebas `Unknown C++ exception from OpenCV`.
+- **cv2.VideoCapture / cv2.VideoWriter sudah tidak ada** di seluruh jalur
+  render/deteksi — hanya cv2.resize (array valid) + Haar fallback yang tersisa.
 - Verifikasi: render-chain 6/6 OK (crop-follow ffmpeg pipe) + A/B 13/13 PASS.
 
 ## 6k. Mode GRATIS — faster-whisper lokal + Gemini (2026-09-02)
