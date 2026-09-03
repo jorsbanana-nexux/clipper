@@ -71,7 +71,8 @@ def _xfade_concat(seg_files: list[str], out_path: str) -> str:
     if n == 0:
         raise RuntimeError("no segments to concat")
     if n == 1:
-        subprocess.run(["cp", seg_files[0], out_path], check=True, capture_output=True)
+        # `cp` is Unix-only; use shutil.copy for Windows compatibility.
+        shutil.copy(seg_files[0], out_path)
         return out_path
 
     durations = [_probe_duration(p) for p in seg_files]

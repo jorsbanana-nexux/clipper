@@ -237,6 +237,8 @@ def reframe_duo(video_path: str, output_path: str) -> str:
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
     band_h = TH // 2
     W, H = _probe_dims(video_path)
+    if W < 8 or H < 8:
+        return _reframe_blur_pad(video_path, output_path)
     half_w = W // 2
 
     vf = (
@@ -340,9 +342,14 @@ def _probe_fps(video_path: str) -> float:
     try:
         num, den = out.stdout.strip().split("/")
         num, den = float(num), float(den)
-        return num / den if den else 30.0
+        fps = num / den if den else 30.0
     except Exception:
+        fps = 30.0
+    # Some videos report 0/1 or a non-sensical fps; a non-positive value would
+    # break time math (idx/fps) and the -r encoder arg. Clamp to a sane default.
+    if not fps or fps < 1.0 or fps > 120.0:
         return 30.0
+    return fps
 
 
 def _reframe_blur_pad(video_path, output_path):

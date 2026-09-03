@@ -459,3 +459,18 @@ Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):
 - Plus: error render kini menampilkan penyebab asli (jenis + stderr ffmpeg + kode
   keluar) lewat `jobs._brief_error` — bukan lagi pesan generik.
 - Verifikasi: `_fpath` benar, render-chain 6/6 OK, A/B 13/13 PASS.
+
+## 6o. Review mikroskopis — fix lint & hardening (2026-09-03)
+
+- **`compositor._xfade_concat`**: `subprocess.run(["cp", ...])` adalah perintah
+  Unix; di Windows tidak ada → diganti `shutil.copy` (aman lintas-platform).
+  Normalnya tak terpanggil (dynamic path ≥2 segmen), tapi kini tak jadi jebakan.
+- **`face_tracker._probe_fps`**: bisa mengembalikan 0.0 (frame rate video terbaca
+  `0/1` dsb.) → `idx/fps` jadi ZeroDivisionError & argumen `-r 0` gagal. Kini
+  dikunci ke 30.0 jika bukan 1..120 fps.
+- **`face_tracker.reframe_duo`**: guard `W,H < 8` → blur-pad (mencegah crop lebar
+  0 / error ffmpeg pada video sangat kecil).
+- Verifikasi menyeluruh (tidak hanya harness): lint pyflakes bersih (tanpa
+  undefined/redefinisi), review end-to-end `jobs.py`/`downloader.py`/
+  `analyzer.py`/`transcriber.py`/`subtitles.py`/`layout.py`/`diarization.py`/
+  `compositor.py`/`models.py`/`main.py`. Render-chain 6/6 + A/B 13/13.
