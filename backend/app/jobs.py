@@ -148,15 +148,31 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
 
     vertical = str(seg_dir / "vertical.mp4")
     distinct = {s.get("layout") for s in timeline}
+    dynamic_layout = len(timeline) > 1 and len(distinct) > 1
     job.update(status="rendering", stage=f"render_{index}/reframe",
                message=f"Clip {index}: membingkai ulang 9:16 + tracking wajah")
-    if len(timeline) > 1 and len(distinct) > 1:
+    if dynamic_layout:
         await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
     elif timeline and timeline[0].get("layout") == "duo":
         await asyncio.to_thread(face_tracker.reframe_duo, raw_path, vertical)
     else:
         samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
         await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
+
+    # B5 sync fix: xfade crossfades shorten the output by (n-1)*CROSSFADE, so the
+    # real video is a bit shorter than (padded_end - padded_start). Subtitle times
+    # are in local [0, target_dur]; scale them to the ACTUAL rendered duration so
+    # word-by-word captions stay exactly in sync with the (slightly compressed)
+    # dynamic video instead of running past the end / drifting.
+    if dynamic_layout and local_words:
+        target_dur = padded_end - padded_start
+        actual_dur = renderer.probe_duration(vertical)
+        if actual_dur > 0.0 and actual_dur < target_dur * 0.999:
+            scale = actual_dur / target_dur
+            local_words = [
+                {**w, "start": w["start"] * scale, "end": w["end"] * scale}
+                for w in local_words
+            ]
 
     ass_path = str(seg_dir / "subs.ass")
     if local_words:

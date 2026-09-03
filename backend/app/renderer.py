@@ -88,3 +88,16 @@ def verify_output(video_path: str, expect_min_duration: float = 1.0) -> dict:
         raise RuntimeError(f"Output duration {dur:.2f}s < expected {expect_min_duration}s")
 
     return {"has_video": has_video, "has_audio": has_audio, "duration": round(dur, 2)}
+
+
+def probe_duration(video_path: str) -> float:
+    """Duration in seconds via ffprobe (0.0 on failure)."""
+    out = subprocess.run(
+        [FFPROBE, "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", video_path],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(out.stdout.strip())
+    except ValueError:
+        return 0.0
