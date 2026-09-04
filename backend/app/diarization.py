@@ -28,6 +28,24 @@ def diarization_available() -> bool:
         return False
 
 
+def unavailable_reason() -> str:
+    """WHY multi-speaker diarization is off — surfaced to the user so a silent
+    misconfiguration (e.g. token set but deps not installed) is never a mystery."""
+    if not config.MULTI_SPEAKER:
+        return "CLIPPER_MULTI_SPEAKER is not set to 1"
+    if not config.HUGGINGFACE_TOKEN:
+        return "HUGGINGFACE_TOKEN is empty (.env)"
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return "torch not installed — run: pip install -r requirements-multispeaker.txt"
+    try:
+        import pyannote.audio  # noqa: F401
+    except ImportError:
+        return "pyannote.audio not installed — run: pip install -r requirements-multispeaker.txt"
+    return ""
+
+
 def diarize(audio_path: str) -> list[dict]:
     """Return [{speaker, start, end}] turns, or [] when unavailable/failed."""
     if not diarization_available():

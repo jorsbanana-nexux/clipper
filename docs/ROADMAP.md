@@ -474,3 +474,13 @@ Untuk pengguna yang ingin Clipper **tanpa biaya OpenAI** (0 modal):
   undefined/redefinisi), review end-to-end `jobs.py`/`downloader.py`/
   `analyzer.py`/`transcriber.py`/`subtitles.py`/`layout.py`/`diarization.py`/
   `compositor.py`/`models.py`/`main.py`. Render-chain 6/6 + A/B 13/13.
+
+---
+
+## Status v0.2.2 (2026-09-04) — evaluasi pengguna
+
+- [x] Subtitle MrBeast strict (tanpa tanda baca, 2 baris tengah, bounce 120/95/100, hanya kata aktif berwarna kuning)
+- [x] FIX diarization HuggingFace di jalur caption (gating `not used_captions` dihapus) + diagnostik `/health`
+- [x] Snap-cut anti dead-air (`_snap_cut_boundaries`) + prompt HOOK→INTI→KONKLUSI
+- [x] Kamera: bidirectional-EMA easing, zoom-out 0.80, headroom 0.32
+- [x] Verifikasi fase A/B: tanpa dead code; batch paralel (`CLIPPER_MAX_PARALLEL`) bekerja

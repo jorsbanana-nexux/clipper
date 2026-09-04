@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config
+from .diarization import diarization_available, unavailable_reason
 from .jobs import JobManager, manager
 from .models import ClipRequest, JobStatus
 
@@ -45,7 +46,9 @@ def health():
         "openai_key": "set" if config.OPENAI_API_KEY else "missing",
         "gemini_key": "set" if config.GEMINI_API_KEY else "missing",
         "analysis_ready": analysis_ready,
-        "multi_speaker": bool(config.MULTI_SPEAKER and config.HUGGINGFACE_TOKEN),
+        "multi_speaker": diarization_available(),
+        "multi_speaker_env": bool(config.MULTI_SPEAKER and config.HUGGINGFACE_TOKEN),
+        "multi_speaker_reason": unavailable_reason() or "active",
     }
 
 

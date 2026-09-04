@@ -83,10 +83,21 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
           up front, a build, and a satisfying payoff / punchline / takeaway at the
           end. A clip without a payoff feels flat and boring.
 
+        THE MEAT (mandatory structure per clip — no exceptions):
+        - HOOK: the first seconds must grab ("wait, what did he just say?").
+        - INTI: the core problem / surprising idea / the story being built.
+        - KONKLUSI: the payoff — punchline, answer, or takeaway. If a moment
+          has NO payoff, it is NOT a clip. Skip it entirely.
+
         CUT TIMING (accuracy matters — this is the #1 complaint):
         - Choose the START at the first word of the thought (never mid-sentence).
         - Choose the END EXACTLY when the point lands / the punchline is delivered.
           Do NOT extend past it — trailing words after the payoff kill the clip.
+        - NEVER include trailing silence, "um / yeah / so..." filler, or the
+          topic change that comes AFTER the payoff. If the transcript shows a
+          pause or the speaker trailing off, END THE CLIP THERE. Dead air at
+          the end = a broken clip.
+
         - Each clip must be {min_dur}-{max_dur} seconds.
         - Use the EXACT timestamps from the transcript. Never invent times.
         - Avoid overlaps between clips.

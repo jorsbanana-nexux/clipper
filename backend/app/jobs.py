@@ -12,6 +12,7 @@ v1 keeps jobs in memory (single-process). Swapping the dict for Redis is a
 documented future step for horizontal scaling.
 """
 import asyncio
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -45,6 +46,59 @@ def _remap_words_for_xfade(words: list[dict], timeline: list[dict],
         off = rendered_starts[idx] - timeline[idx]["start"]
         out.append({**w, "start": w["start"] + off, "end": w["end"] + off})
     return out
+
+
+def _snap_cut_boundaries(highlights, segments, min_dur: float = 15.0) -> None:
+    """The "no dead air" cut rule, enforced in CODE — not just in prompts.
+
+    For every highlight: walk back from the LLM's end time to the last natural
+    stopping point — a sentence-final segment, or a segment followed by a
+    silence gap. If the LLM left trailing filler/dead air, the end is pulled
+    back so the clip stops right after the payoff. Never shortens below
+    min_dur. Mutates the highlights in place.
+    """
+    if not highlights or not segments:
+        return
+    segs = sorted(
+        (s for s in segments
+         if s.get("end") is not None and s.get("start") is not None),
+        key=lambda s: float(s["start"]))
+    if not segs:
+        return
+    for hl in highlights:
+        end = float(hl.end_time)
+        floor = float(hl.start_time) + min_dur
+        best = None
+        # PASS 1 (preferred): the last SENTENCE-FINAL segment in range — cut
+        # exactly after the conclusion sentence, even if filler follows it.
+        for s in reversed(segs):
+            s_end = float(s["end"])
+            if s_end > end + 0.25:
+                continue
+            if s_end <= floor:
+                break
+            if re.search(r"[.!?…]", s.get("text") or ""):
+                best = s_end
+                break
+        # PASS 2 (fallback): no sentence-final found — stop at the last
+        # segment followed by a silence gap (drops trailing dead air anyway).
+        if best is None:
+            for s in reversed(segs):
+                s_end = float(s["end"])
+                if s_end > end + 0.25:
+                    continue
+                if s_end <= floor:
+                    break
+                nxt = None
+                for t in segs:
+                    if float(t["start"]) > s_end + 0.01:
+                        nxt = t
+                        break
+                if nxt is None or (float(nxt["start"]) - s_end) >= 0.45:
+                    best = s_end
+                    break
+        if best is not None and end - best >= 0.3:
+            hl.end_time = round(best, 3)
 
 
 def _brief_error(exc: BaseException) -> str:
@@ -361,15 +415,35 @@ async def _run_pipeline(job: Job, request) -> None:
         job.update(status="analyzing", stage="analyze", progress=0.35,
                    message="Finding viral moments...")
         # B2: run diarization once on the full audio (if enabled) so analysis is
-        # speaker-aware. On the captions path we may not have the full audio yet,
-        # so diarization is skipped there (turns = []).
+        # speaker-aware (two-person exchanges are preferred for virality).
+        # BUGFIX (the "HF duo never activates" bug): this was gated on
+        # `not used_captions`, so on the DEFAULT captions path speaker turns
+        # were NEVER fed to the analyzer even with HUGGINGFACE_TOKEN +
+        # CLIPPER_MULTI_SPEAKER=1. Now, when multi-speaker is enabled, the full
+        # audio is fetched once for diarization on EVERY transcript path. When
+        # it is NOT enabled the pipeline stays light (solo, smooth crop-follow).
         analysis_turns: list[dict] = []
-        if diarization.diarization_available() and not used_captions and audio_path:
+        if config.MULTI_SPEAKER:
+            reason = diarization.unavailable_reason()
+            if reason:
+                job.update(message=f"multi-speaker OFF: {reason}")
+            else:
+                job.update(message="multi-speaker ON: running diarization...")
+        if diarization.diarization_available():
             try:
-                full_audio = str(work_dir / "diar_full.wav")
-                await asyncio.to_thread(renderer.cut_audio, audio_path, 0.0, duration, full_audio)
-                analysis_turns = await asyncio.to_thread(diarization.diarize, full_audio)
-            except Exception:
+                if not audio_path:
+                    audio_path, info2 = await asyncio.to_thread(
+                        downloader.download_audio_only, request.url, str(work_dir))
+                    if not duration:
+                        duration = float((info2 or {}).get("duration") or 0.0)
+                if audio_path and duration > 0:
+                    full_audio = str(work_dir / "diar_full.wav")
+                    await asyncio.to_thread(renderer.cut_audio, audio_path, 0.0, duration, full_audio)
+                    analysis_turns = await asyncio.to_thread(diarization.diarize, full_audio)
+                    if analysis_turns:
+                        job.update(message=f"diarization OK: {len(analysis_turns)} speaker turns")
+            except Exception as e:
+                job.update(message=f"multi-speaker diarization failed: {e}")
                 analysis_turns = []
         analysis = await asyncio.to_thread(
             analyzer.find_viral_moments,
@@ -377,6 +451,9 @@ async def _run_pipeline(job: Job, request) -> None:
             config.MIN_CLIP_SEC, config.MAX_CLIP_SEC, analysis_turns,
         )
         highlights = analysis.highlights[:request.max_clips]
+        # CUT RULE (in code): trim trailing filler/dead air the LLM may have
+        # left — every clip must end right after the payoff's final word.
+        _snap_cut_boundaries(highlights, analysis_segments, config.MIN_CLIP_SEC)
 
         # ---- 3. render each clip (bounded by CLIPPER_MAX_PARALLEL) ----
         total = max(1, len(highlights))

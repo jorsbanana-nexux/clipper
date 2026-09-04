@@ -3,7 +3,16 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-04 (v0.2.1 — perbaikan bug audit: transkrip penuh ke LLM, timing pop subtitle, parser caption json3/srv/VTT-MM:SS, cache full-download, singleton Whisper, remap xfade per-segment, cleanup intermediates)
+**Terakhir diperbarui:** 2026-09-04 (v0.2.2 — subtitle MrBeast strict, FIX diarization HuggingFace di jalur caption, diagnostik multi-speaker, snap-cut anti dead-air, kamera bidirectional-EMA + zoom-out, prompt analyzer HOOK→INTI→KONKLUSI)
+
+## 0b. Changelog v0.2.2 (evaluasi pengguna: performa, AI, kamera, duo HF, subtitle)
+
+1. **Subtitle MrBeast strict** — teks 100% tanpa tanda baca; maks 2 baris di tengah layar; bounce per kata 100→120→95→100% sinkron dengan pengucapan; HANYA kata aktif menyala kuning lalu kembali putih; stroke hitam tebal. (`subtitles.py`, config `SUBTITLE_POP/DIP/POP_COLOR`)
+2. **FIX duo HuggingFace di jalur caption** — gating `not used_captions` membuat diarization level-analisis TIDAK PERNAH berjalan di jalur default (captions) walau token HF + `CLIPPER_MULTI_SPEAKER=1` sudah diisi. Kini: mode multi-speaker aktif → audio penuh diunduh sekali (ter-cache) untuk diarization di SEMUA jalur; nonaktif → tetap ringan, solo crop-follow mulus.
+3. **Diagnostik multi-speaker** — penyebab nonaktifnya HF (env off / token kosong / torch / pyannote belum diinstall) dilaporkan ke pesan job dan `/health` (`multi_speaker_reason`) — gagal senyap tidak terjadi lagi.
+4. **Anti dead-air (cut rule di KODE, bukan cuma prompt)** — `_snap_cut_boundaries`: akhir tiap klip ditarik ke akhir kalimat konklusi / sebelum jeda hening; filler dan dead air di akhir klip dibuang. Prompt analyzer kini mewajibkan struktur HOOK → INTI → KONKLUSI dan melarang ekor hening.
+5. **Kamera** — EMA dua arah (forward+backward): pan eases in-out, tidak lagi telat/kaku; zoom-out default 0.86→0.80, headroom 0.30→0.32: wajah proporsional, tidak menempel layar.
+6. **Verifikasi fase A/B** — tidak ada dead code: seluruh fungsi renderer/layout/diarization/downloader terpanggil. Batch render paralel (bounded `CLIPPER_MAX_PARALLEL`, CPU-aware, gagal satu klip tidak membatalkan job) diverifikasi bekerja.
 
 ## 0. Changelog v0.2.1 (bug-fix audit)
 

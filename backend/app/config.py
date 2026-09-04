@@ -90,7 +90,9 @@ MAX_SUBTITLE_LINES: int = int(os.environ.get("CLIPPER_SUBTITLE_LINES", "2"))
 # Active (being-spoken) word = bright saturated BLUE (Mr Beast highlighter).
 # #1E90FF = R=1E, G=90, B=FF -> &H00FF901E. Rest of words stay WHITE.
 SUBTITLE_BASE_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BASE_COLOR", "&H00FFFFFF")
-SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H00FF901E")
+# STRICT Mr Beast: ONLY the active word flashes to YELLOW (&HAABBGGRR,
+# yellow = 0000FFFF in BGR) and returns to white when the word ends.
+SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H0000FFFF")
 # Thick dark outline = readable over any busy/facial background (Mr Beast look).
 SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "8"))
 SUBTITLE_SHADOW: int = int(os.environ.get("CLIPPER_SUBTITLE_SHADOW", "3"))
@@ -98,7 +100,10 @@ SUBTITLE_SHADOW: int = int(os.environ.get("CLIPPER_SUBTITLE_SHADOW", "3"))
 SUBTITLE_BACK_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BACK_COLOR", "&H70141014")
 # Scale-pop animation: the ACTIVE word scales up to this fraction (1.0 = off).
 # Mr Beast style uses a punchy per-word pop that reads instantly on rewatches.
-SUBTITLE_POP: float = float(os.environ.get("CLIPPER_SUBTITLE_POP", "1.25"))
+# STRICT Mr Beast bounce: active word jumps to 120% (POP), dips to 95% (DIP),
+# settles back to 100% exactly when the word ends.
+SUBTITLE_POP: float = float(os.environ.get("CLIPPER_SUBTITLE_POP", "1.20"))
+SUBTITLE_DIP: float = float(os.environ.get("CLIPPER_SUBTITLE_DIP", "0.95"))
 # How many words per subtitle cue (Mr Beast style = short, ~2). Keeps text
 # glanceable instead of a wall of text.
 MAX_SUBTITLE_WORDS: int = int(os.environ.get("CLIPPER_SUBTITLE_WORDS", "2"))
@@ -166,12 +171,13 @@ FFMPEG_CRF: int = int(os.environ.get("CLIPPER_FFMPEG_CRF", "21"))
 # Zoom-out factor for the 9:16 crop-follow. 1.0 = tight full-height fill (face
 # fills frame); <1.0 zooms out: subject is scaled down and placed on a blurred
 # background with headroom, so the face is smaller and framing is comfortable.
-FACE_ZOOM: float = float(os.environ.get("CLIPPER_FACE_ZOOM", "0.86"))
+# 0.80 = comfortable zoom-OUT with headroom (was 0.86: too tight on the face).
+FACE_ZOOM: float = float(os.environ.get("CLIPPER_FACE_ZOOM", "0.80"))
 # Camera smoothing: alpha of the exponential moving average on face centre-x
 # (lower = smoother/slower to catch up; higher = snappier/more jitter).
-FACE_SMOOTH_ALPHA: float = float(os.environ.get("CLIPPER_FACE_SMOOTH", "0.28"))
+FACE_SMOOTH_ALPHA: float = float(os.environ.get("CLIPPER_FACE_SMOOTH", "0.20"))
 # Headroom: where the subject sits vertically on the canvas (0=top, 1=bottom).
-FACE_HEADROOM: float = float(os.environ.get("CLIPPER_FACE_HEADROOM", "0.30"))
+FACE_HEADROOM: float = float(os.environ.get("CLIPPER_FACE_HEADROOM", "0.32"))
 
 # --- Duo split-screen ---
 # Pre-switch: how many seconds BEFORE the 2nd speaker's turn the screen should

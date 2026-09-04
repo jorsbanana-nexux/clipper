@@ -11,7 +11,8 @@
 
 **AI web clipper** — tempel link video, AI menganalisis momen viral, memotong hanya
 bagian terbaik, lalu membingkai ulang ke **9:16** dengan **subtitle word-by-word**
-(gaya Alex Hormozi) + **face tracking**, siap diunduh dan diunggah ke TikTok / Reels / Shorts.
+(gaya MrBeast strict: 100% tanpa tanda baca, maks 2 baris di tengah layar,
+bounce per kata 120%→95%→100%, hanya kata aktif yang menyala kuning) + **face tracking**, siap diunduh dan diunggah ke TikTok / Reels / Shorts.
 
 > "Bukan sekadar clipper otonom yang kaku — tapi editor profesional."
 
@@ -49,7 +50,7 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
   (crop kiri/kanan untuk 2 pembicara berdampingan), dan speaker
   diarization opsional (pyannote) untuk auto-decision single vs duo. Tanpa `HUGGINGFACE_TOKEN`
   otomatis fallback ke single-speaker (ringan).
-- **Subtitle word-by-word** — font tebal (Montserrat/Bebas Neue), highlight per kata, margin aman.
+- **Subtitle MrBeast strict** — teks 100% tanpa tanda baca, maks 2 baris di tengah layar, font Komika Axis tebal, stroke hitam tebal, bounce per kata 100→120→95→100%, HANYA kata yang sedang diucapkan menyala kuning lalu kembali putih.
 - **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
 - **Efek viral** — kontras + saturasi + sharpen ringan.
 - **Padding 1,5 detik** — tiap clip dipotong sedikit lebih lebar agar momen selalu utuh (anti-terpotong).

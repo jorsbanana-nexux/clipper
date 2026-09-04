@@ -45,11 +45,13 @@ def _resolve_font(font_name: str) -> str:
 
 
 def _clean_word(word: str) -> str:
-    """Remove sentence punctuation from a word (keep internal apostrophes)."""
-    w = _PUNCT.sub("", word)
-    w = re.sub(rf"^[{_WORD_CHARS}]*[^\w'’]+", "", w)
-    w = re.sub(rf"[^\w'’]+[{_WORD_CHARS}]*$", "", w)
-    return w
+    """STRICT Mr Beast style: subtitle text is 100% clean.
+
+    ALL punctuation is removed — periods, commas, question marks, apostrophes,
+    dashes, everything. Only letters/digits survive ("don't" -> "dont",
+    "viral!" -> "viral", "so..." -> "so").
+    """
+    return re.sub(r"[^\w]", "", word, flags=re.UNICODE)
 
 
 def _max_chars_per_line(width: int, font_size: int) -> int:
@@ -116,31 +118,33 @@ def _build_groups(words: list[dict], width: int, height: int) -> list[list[dict]
 
 
 def _word_tags(w: dict, line_start: float) -> str:
-    """Override tags for one word: karaoke fill + scale-pop animation.
+    """Per-word Mr Beast animation: colour flash + bounce (100->120->95->100).
 
-    The karaoke `\\kf` fills the ACTIVE word with the secondary (pop) colour.
-    The `\\t(start,end,\\fscx\\fscy)` transform scales that word up during its
-    own spoken window then back, so each word "pops" precisely as it's spoken.
-    Times are centiseconds relative to the line start.
+    STRICT spec:
+    - Every word renders WHITE with the style's thick black stroke. ONLY the
+      word being spoken flashes to the accent colour, then returns to white
+      the moment the word ends. (The old \\kf karaoke kept spoken words
+      coloured forever — not the Mr Beast look.)
+    - Scale bounce synchronised per word: jump to 120% as the word starts,
+      dip to 95%, settle back to 100% exactly when the word ends.
+    All \\t() times are MILLISECONDS relative to the cue (Dialogue) start.
     """
-    t0 = max(0, int(round((w["start"] - line_start) * 100)))
-    t1 = max(t0 + 1, int(round((w["end"] - line_start) * 100)))
-    d = max(1, t1 - t0)
-    pop = max(1.0, float(getattr(config, "SUBTITLE_POP", 1.25)))
-    scale = int(round(pop * 100))
-    # BUGFIX: \t() transform times are MILLISECONDS relative to the cue start
-    # (only the \kf duration is centiseconds). The old code passed
-    # centiseconds, so the scale-pop finished in ~1/10 of the intended time —
-    # a ~20ms flash instead of a punchy bounce lasting the spoken word.
-    ms0 = t0 * 10
-    ms1 = t1 * 10
-    mid = (ms0 + ms1) // 2
-    # Per-word BOUNCE (per the Mr Beast tutorial): scale UP in the first half
-    # of the spoken window, then settle BACK in the second half.
+    peak = int(round(max(1.0, float(getattr(config, "SUBTITLE_POP", 1.20))) * 100))
+    dip = int(round(min(1.0, max(0.5, float(getattr(config, "SUBTITLE_DIP", 0.95)))) * 100))
+    ms0 = max(0, int(round((w["start"] - line_start) * 1000)))
+    ms1 = max(ms0 + 40, int(round((w["end"] - line_start) * 1000)))
+    span = ms1 - ms0
+    t40 = ms0 + int(span * 0.4)
+    t75 = ms0 + int(span * 0.75)
+    pop_col = config.SUBTITLE_POP_COLOR
+    base_col = config.SUBTITLE_BASE_COLOR
+    # 40ms colour ramps read as instant on a phone but never flicker.
     return (
-        f"{{\\kf{d}"
-        f"\\t({ms0},{mid},\\fscx{scale}\\fscy{scale})"
-        f"\\t({mid},{ms1},\\fscx100\\fscy100)}}"
+        f"{{\\t({ms0},{t40},\\fscx{peak}\\fscy{peak})"
+        f"\\t({t40},{t75},\\fscx{dip}\\fscy{dip})"
+        f"\\t({t75},{ms1},\\fscx100\\fscy100)"
+        f"\\t({ms0},{ms0 + 40},\\c{pop_col})"
+        f"\\t({ms1},{ms1 + 40},\\c{base_col})}}"
     )
 
 
@@ -163,10 +167,13 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
     # - single: face sits in the upper area (headroom), so bottom ~13% is clear.
     # - duo:    faces occupy top & bottom bands; lift text into the center seam
     #           so it reads between the two speakers instead of over the lower one.
+    # STRICT Mr Beast placement: max 2 lines centred on the screen (never
+    # glued to the bottom edge). With \an2 (bottom-centre) this MarginV lifts
+    # the text block so it sits in the middle of the screen, below the face.
     if mode == "duo":
-        margin_v = int(height * 0.46)   # center seam
+        margin_v = int(height * 0.46)   # center seam between the two faces
     else:
-        margin_v = int(height * 0.13)
+        margin_v = int(height * 0.34)
 
     header = (
         "[Script Info]\n"

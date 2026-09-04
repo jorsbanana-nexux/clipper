@@ -190,14 +190,24 @@ def _smooth_series(cxs: list[float], window: int = 5) -> list[float]:
 
 
 def _ema_smooth(cxs: list[float], alpha: float = 0.28) -> list[float]:
-    """Exponential moving average — smoother pans than a flat window and easier
-    to tune (alpha 0..1; lower = smoother/slower, higher = snappier)."""
+    """Bidirectional EMA (forward pass + backward pass, averaged).
+
+    A single forward EMA always LAGS behind fast speaker changes — the camera
+    arrives late and the pan feels stiff. The full sample list is known before
+    rendering, so we also smooth BACKWARD: the two passes cancel most of the
+    lag while keeping the glide. Pans now ease in and out around each speaker
+    change instead of jerking. alpha 0..1; lower = smoother, higher = snappier.
+    """
     if not cxs:
         return []
-    out = [cxs[0]]
+    fwd = [cxs[0]]
     for v in cxs[1:]:
-        out.append(out[-1] + alpha * (v - out[-1]))
-    return out
+        fwd.append(fwd[-1] + alpha * (v - fwd[-1]))
+    bwd = [cxs[-1]]
+    for v in reversed(cxs[:-1]):
+        bwd.append(bwd[-1] + alpha * (v - bwd[-1]))
+    bwd.reverse()
+    return [(f + b) / 2.0 for f, b in zip(fwd, bwd)]
 
 
 def has_two_speakers(video_path: str, min_ratio: float = 0.35,
