@@ -162,6 +162,37 @@ Munch "no support from a person"):
    identitas + bukti render crop mengikuti track + anti-smear) — PASS.
    Semua smoke test lama tetap PASS (tanpa regresi).
 
+## 2f. Changelog v0.3.4 — 3 BUG NYATA DARI LAPORAN USER (2026-09-04 malam)
+
+1. **BUGFIX KRITIS "genai_types is not defined"**: v0.3.1 memisah
+   _analyze_gemini() jadi 2 fungsi (fallback model chain), tapi
+   `from google.genai import types as genai_types` tetap import LOKAL di
+   fungsi pertama -- fungsi KEDUA (_gemini_generate, yang benar2 dipanggil
+   client.models.generate_content) tak pernah melihat nama itu -> NameError
+   di SETIAP panggilan Gemini nyata. Dipindah ke import module-level lazy
+   (_genai/_genai_types), tetap graceful kalau SDK tak terpasang. Diverifikasi
+   dgn mock client end-to-end (SDK dipasang sementara di sandbox, dites, lalu
+   dicopot lagi) -- TIDAK NameError lagi.
+2. **BUGFIX "config .env diam-diam diabaikan"**: preset "mrbeast" di
+   config.py hardcode literal sejak rewrite v0.3.0 -- SEMUA 12
+   CLIPPER_SUBTITLE_* env var (termasuk tuning warna custom user sendiri di
+   .env, #1E90FF) 100% dead config, tak pernah dibaca. Preset "mrbeast" kini
+   BENAR2 baca env vars; default env disinkronkan ke nilai v0.3.2/v0.3.3
+   (150/#00E5FF/outline12) supaya TANPA .env pun hasil identik (tak regresi).
+   Diverifikasi 2 skenario: dgn .env custom -> berubah; tanpa .env -> sama
+   seperti sebelumnya.
+3. **UI**: 2 kolom "Topik"/"Instruksi editor" (fitur human-steer v0.3.0,
+   BUKAN permintaan eksplisit dalam sesi ini) disembunyikan di balik toggle
+   "Opsi lanjutan" collapsed by default -- tampilan utama kini persis URL +
+   preset/aspect/jumlah clip + tombol, sesuai memori user. Fitur tak
+   dihapus, cuma tak lagi memenuhi layar utama. Label dropdown "MrBeast —
+   pop kuning" (basi sejak warna jadi biru di v0.3.2) diperbaiki jadi
+   "pop biru elektrik".
+4. **Audit pipeline penuh**: pyflakes di semua file backend -> nihil bug
+   NameError/undefined-name lain. `next build` frontend -> compile bersih,
+   0 error TypeScript. jobs.py/main.py/compositor.py ditelusuri end-to-end,
+   semua callsite face_tracker/subtitles cocok dgn signature v0.3.3.
+
 ## 3. KEKURANGAN / GAP yang diketahui (penting dibaca agent)
 
 > Ini daftar jujur hal-hal yang **belum beres**. Jangan dianggap sudah jalan.

@@ -93,7 +93,7 @@ TARGET_HEIGHT: int = 1920
 SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Komika Axis")
 # Font size is auto-scaled to fit max 2 lines on the safe area. This is the
 # base size before auto-fit. Mr Beast style = big, bold, high-contrast.
-SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "100"))
+SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "150"))
 # Max subtitle lines shown at once (2 = standard vertical-video safe area).
 MAX_SUBTITLE_LINES: int = int(os.environ.get("CLIPPER_SUBTITLE_LINES", "2"))
 # Karaoke word-pop colours. Base = colour of not-yet-spoken words (white);
@@ -105,9 +105,9 @@ MAX_SUBTITLE_LINES: int = int(os.environ.get("CLIPPER_SUBTITLE_LINES", "2"))
 SUBTITLE_BASE_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BASE_COLOR", "&H00FFFFFF")
 # STRICT Mr Beast: ONLY the active word flashes to YELLOW (&HAABBGGRR,
 # yellow = 0000FFFF in BGR) and returns to white when the word ends.
-SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H0000FFFF")
+SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H00FFE500")
 # Thick dark outline = readable over any busy/facial background (Mr Beast look).
-SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "8"))
+SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "12"))
 SUBTITLE_SHADOW: int = int(os.environ.get("CLIPPER_SUBTITLE_SHADOW", "3"))
 # Back box opacity (semi-transparent) behind text for readability on any frame.
 SUBTITLE_BACK_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BACK_COLOR", "&H70141014")
@@ -229,17 +229,21 @@ SUBTITLE_PRESETS: dict = {
     "mrbeast": {
         # Replikasi STRICT dari video referensi youtube.com/watch?v=pf9vd2sny0M
         # ("Mr Beast Subtitles | Premiere Pro & After Effects Tutorial",
-        #  Mograph Mindset & Captioneer) — dianalisis frame-by-frame:
-        #  - Font Komika Axis (persis tutorial, sudah bundled di repo)
-        #  - Kata AKTIF: biru elektrik stabilo #00E5FF (dari video),
-        #    kata lain PUTIH, stroke hitam tebal, bounce 120%->95%->100%
-        #  - Size ~125 @ sequence 1080p horizontal -> skala proporsional utk
-        #    9:16 (em 150): menonjol & terbaca penuh di layar ponsel
-        #  - Cue pendek 2-3 kata, maks 2 baris (bersih, gaya MrBeast)
-        "font": "Komika Axis", "size": 150, "uppercase": False,
-        "base_color": "&H00FFFFFF", "pop_color": "&H00FFE500",  # #00E5FF (ASS BGR)
-        "outline": 12, "shadow": 2, "back_color": "&H70141014",
-        "pop": 1.20, "dip": 0.95, "words": 2, "min_dur": 0.9, "overflow": 5,
+        #  Mograph Mindset & Captioneer) — dianalisis frame-by-frame. Defaultnya
+        #  di bawah (Komika Axis, biru elektrik #00E5FF, size 150, outline 12,
+        #  bounce 120%->95%->100%, cue 2-3 kata) sudah presisi dgn video itu.
+        #
+        # BUGFIX v0.3.4: preset ini SEBELUMNYA punya nilai literal hardcode di
+        # sini, jadi SEMUA env var CLIPPER_SUBTITLE_* di .env (font/size/warna/
+        # outline/pacing) DIAM-DIAM DIABAIKAN -- termasuk tuning warna biru
+        # custom siapa pun di .env. Sekarang preset ini benar2 MEMBACA modul-
+        # level constants (yang sendiri dibaca dari CLIPPER_SUBTITLE_* env,
+        # dgn fallback ke nilai video-referensi di atas jika .env tak diisi).
+        "font": SUBTITLE_FONT, "size": SUBTITLE_SIZE, "uppercase": False,
+        "base_color": SUBTITLE_BASE_COLOR, "pop_color": SUBTITLE_POP_COLOR,
+        "outline": SUBTITLE_OUTLINE, "shadow": SUBTITLE_SHADOW, "back_color": SUBTITLE_BACK_COLOR,
+        "pop": SUBTITLE_POP, "dip": SUBTITLE_DIP, "words": MAX_SUBTITLE_WORDS,
+        "min_dur": MIN_SUBTITLE_DUR, "overflow": MAX_SUBTITLE_WORDS_OVERFLOW,
         "karaoke": False,  # strict pop: only the ACTIVE word flashes
     },
     "hormozi": {  # Alex Hormozi style: huge uppercase, green active word

@@ -31,7 +31,7 @@ type JobStatus = {
 };
 
 const STYLES = [
-  { id: "mrbeast", label: "MrBeast — pop kuning" },
+  { id: "mrbeast", label: "MrBeast — pop biru elektrik" },
   { id: "hormozi", label: "Hormozi — besar hijau" },
   { id: "karaoke", label: "Karaoke — isi progresif" },
   { id: "minimal", label: "Minimal — bersih" },
@@ -71,6 +71,7 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [keywords, setKeywords] = useState("");
   const [instruction, setInstruction] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false); // Topik/Instruksi tersembunyi by default
   const [style, setStyle] = useState("mrbeast");
   const [aspect, setAspect] = useState("9:16");
   const [maxClips, setMaxClips] = useState(8);
@@ -150,36 +151,21 @@ export default function Home() {
         </p>
       </header>
 
-      <form onSubmit={submit} style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginBottom: 28 }}>
+      <form onSubmit={submit} style={{ display: "grid", gap: 10, marginBottom: 28 }}>
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://youtube.com/watch?v=...  (YouTube, TikTok, Instagram)"
-          style={{ ...inputStyle, gridColumn: "1 / -1", flex: "1 1 420px" }}
+          style={{ ...inputStyle, flex: "1 1 420px" }}
         />
-        <input
-          value={keywords}
-          onChange={(e) => setKeywords(e.target.value)}
-          placeholder="Topik yang kamu mau (opsional): mis. 'insight uang, cerita lucu'"
-          style={inputStyle}
-          title="Steer the AI: moments matching these topics get priority"
-        />
-        <input
-          value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
-          placeholder="Instruksi editor (opsional): mis. 'cari yang kontras/debat'"
-          style={inputStyle}
-        />
-        <div style={{ display: "flex", gap: 10 }}>
-          <select value={style} onChange={(e) => setStyle(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select value={style} onChange={(e) => setStyle(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 180 }}>
             {STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           <select value={aspect} onChange={(e) => setAspect(e.target.value)} style={{ ...inputStyle, width: 90 }}>
             {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <select value={maxClips} onChange={(e) => setMaxClips(Number(e.target.value))} style={{ ...inputStyle, flex: 1 }}>
+          <select value={maxClips} onChange={(e) => setMaxClips(Number(e.target.value))} style={{ ...inputStyle, width: 110 }}>
             {[4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n} clips</option>)}
           </select>
           <button disabled={busy} type="submit"
@@ -187,6 +173,34 @@ export default function Home() {
             {busy ? "Processing..." : "Generate clips"}
           </button>
         </div>
+
+        {/* "Human steer": pilih topik/instruksi editor secara opsional. Disembunyikan
+            secara default (klik untuk buka) supaya tampilan utama tetap cuma
+            URL + jumlah clip seperti yang diminta -- fiturnya tetap ada bagi
+            yang mau, tidak dihapus, cuma tidak lagi memenuhi tampilan utama. */}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          style={{ justifySelf: "start", background: "none", border: "none", color: "var(--muted)", fontSize: 12, cursor: "pointer", padding: "2px 0", textDecoration: "underline" }}>
+          {showAdvanced ? "▾ Sembunyikan opsi lanjutan" : "▸ Opsi lanjutan (arahkan AI ke topik tertentu)"}
+        </button>
+        {showAdvanced && (
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+            <input
+              value={keywords}
+              onChange={(e) => setKeywords(e.target.value)}
+              placeholder="Topik yang kamu mau (opsional): mis. 'insight uang, cerita lucu'"
+              style={inputStyle}
+              title="Steer the AI: moments matching these topics get priority"
+            />
+            <input
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder="Instruksi editor (opsional): mis. 'cari yang kontras/debat'"
+              style={inputStyle}
+            />
+          </div>
+        )}
       </form>
 
       {error && <div style={{ padding: 12, borderRadius: 8, background: "#2a1518", border: "1px solid #5c2a2a", color: "#ff9a9a", marginBottom: 20 }}>{error}</div>}

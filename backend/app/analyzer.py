@@ -22,6 +22,22 @@ from textwrap import dedent
 from . import config
 from .models import HighlightAnalysis
 
+# BUGFIX (v0.3.4): `genai_types` used to be imported LOCALLY inside
+# _analyze_gemini() and referenced from a DIFFERENT function, _gemini_generate()
+# — Python does not share a function's local names with its callees (no
+# closure here, they're sibling top-level functions), so every real Gemini
+# call raised `NameError: name 'genai_types' is not defined` the moment it
+# reached client.models.generate_content(). Moved to a module-level LAZY
+# import: still optional (ANALYSIS_BACKEND=openai users may not have
+# google-genai installed at all), but now visible to every function in this
+# file instead of only the one that happened to import it.
+try:
+    from google import genai as _genai
+    from google.genai import types as _genai_types
+except ImportError:
+    _genai = None
+    _genai_types = None
+
 
 def _format_segments(segments: list[dict], limit: int = 0,
                       max_chars: int | None = None) -> str:
@@ -190,14 +206,11 @@ def _analyze_gemini(prompt: str) -> HighlightAnalysis:
             "ANALYSIS_BACKEND=gemini but GEMINI_API_KEY is empty. "
             "Get a free key at https://aistudio.google.com/apikey and set it in .env "
             "(or set ANALYSIS_BACKEND=openai to use OpenAI).")
-    try:
-        from google import genai
-        from google.genai import types as genai_types
-    except ImportError:
+    if _genai is None or _genai_types is None:
         raise RuntimeError(
             "google-genai not installed. Run: pip install -U google-genai")
 
-    client = genai.Client(api_key=config.GEMINI_API_KEY)
+    client = _genai.Client(api_key=config.GEMINI_API_KEY)
     # v0.3.1: MODEL FALLBACK CHAIN. Model utama 404/deprecated atau sibuk ->
     # otomatis lanjut ke model gratis berikutnya. Analysis tidak pernah mati
     # hanya karena Google mempensiunkan/menyibukkan satu model.
@@ -227,7 +240,7 @@ def _gemini_generate(client, model_name: str, prompt: str) -> HighlightAnalysis:
             resp = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
-                config=genai_types.GenerateContentConfig(
+                config=_genai_types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=HighlightAnalysis,
                     temperature=0.2,
