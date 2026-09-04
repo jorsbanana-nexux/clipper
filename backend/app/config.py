@@ -202,3 +202,57 @@ PRECISE_TRIM: bool = os.environ.get("CLIPPER_PRECISE_TRIM", "1") in ("1", "true"
 # Trailing padding after the highlighted moment (small = clip stops crisply at
 # the punchline instead of rambling on). Head padding stays at PADDING_SEC.
 TAIL_SEC: float = float(os.environ.get("CLIPPER_TAIL_SEC", "0.35"))
+
+# ======================== v0.3 — PRESETS & ASPECTS ========================
+# Subtitle STYLE PRESETS (v0.3). Every key maps onto the SUBTITLE_* config
+# knobs above. Selected per job via ClipRequest.subtitle_style — answers the
+# "low creative control" complaint every clipper platform gets on Reddit.
+# Colours are ASS &HAABBGGRR.
+SUBTITLE_PRESETS: dict = {
+    "mrbeast": {
+        "font": "Komika Axis", "size": 100, "uppercase": False,
+        "base_color": "&H00FFFFFF", "pop_color": "&H0000FFFF",
+        "outline": 8, "shadow": 3, "back_color": "&H70141014",
+        "pop": 1.20, "dip": 0.95, "words": 2, "min_dur": 0.9, "overflow": 5,
+        "karaoke": False,  # strict pop: only the ACTIVE word flashes
+    },
+    "hormozi": {  # Alex Hormozi style: huge uppercase, green active word
+        "font": "Komika Axis", "size": 118, "uppercase": True,
+        "base_color": "&H00FFFFFF", "pop_color": "&H0000F61E",  # bright green
+        "outline": 9, "shadow": 3, "back_color": "&H90141014",
+        "pop": 1.30, "dip": 0.92, "words": 2, "min_dur": 0.8, "overflow": 6,
+        "karaoke": False,
+    },
+    "minimal": {  # calm, small, clean — for talking-head / educational content
+        "font": "Komika Axis", "size": 72, "uppercase": False,
+        "base_color": "&H00FFFFFF", "pop_color": "&H00FFFFFF",
+        "outline": 5, "shadow": 2, "back_color": "&H50141014",
+        "pop": 1.06, "dip": 0.98, "words": 4, "min_dur": 1.1, "overflow": 7,
+        "karaoke": False,
+    },
+    "karaoke": {  # progressive fill: words stay highlighted once spoken
+        "font": "Komika Axis", "size": 96, "uppercase": False,
+        "base_color": "&H00FFFFFF", "pop_color": "&H0000FFFF",
+        "outline": 7, "shadow": 3, "back_color": "&H70141014",
+        "pop": 1.10, "dip": 0.97, "words": 3, "min_dur": 1.0, "overflow": 6,
+        "karaoke": True,
+    },
+    "none": {},  # no subtitles at all
+}
+
+
+def get_subtitle_preset(name: str) -> dict:
+    """Resolve a preset name to its style dict. Unknown names -> mrbeast."""
+    p = SUBTITLE_PRESETS.get((name or "").strip().lower())
+    if p is None:
+        p = SUBTITLE_PRESETS["mrbeast"]
+    return p
+
+
+# Export aspect ratios (v0.3). The render pipeline is native 9:16; 1:1 / 4:5
+# are converted in ONE cheap final pass (scale + blurred pad, face safe).
+ASPECTS: dict = {
+    "9:16": (1080, 1920),
+    "1:1": (1080, 1080),
+    "4:5": (1080, 1350),
+}

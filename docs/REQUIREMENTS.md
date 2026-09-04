@@ -3,7 +3,33 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-04 (v0.2.2 — subtitle MrBeast strict, FIX diarization HuggingFace di jalur caption, diagnostik multi-speaker, snap-cut anti dead-air, kamera bidirectional-EMA + zoom-out, prompt analyzer HOOK→INTI→KONKLUSI)
+**Terakhir diperbarui:** 2026-09-04 (v0.3.0 — human steer, skor 5 dimensi, metadata posting bahasa konten, preset subtitle, multi-aspek, ZIP, smoke test offline)
+
+## 0a-bis. Changelog v0.3.0 (2026-09-04 — riset kompetitor: Opus, Vizard, Klap, 2short, Clip.fm, quso, Wisecut, Riverside, Munch, SubMagic, Captions, CapCut, Eklipse, Spikes)
+
+> Dirancang dari keluhan pengguna nyata lintas platform (moment selection meleset,
+> klip repetitif, subtitle buruk terutama non-English, kontrol kreatif rendah,
+> metadata posting tidak ada). Detail: `docs/ROADMAP.md` §2b.
+
+1. **Human steer** — `ClipRequest.keywords` + `instruction` masuk prompt analyzer
+   (prioritas tertinggi). Keluhan #1 semua platform: "AI picked the boring parts".
+2. **Skor multi-dimensi** — `models.ClipScores` (hook/payoff/emotion/quotability/
+   energy, 1-10, tanpa inflasi) di tiap `ViralMoment` & `ClipInfo`.
+3. **Metadata posting** — `caption` + `hashtags` per clip, dalam BAHASA KONTEN
+   (language rule eksplisit di prompt).
+4. **Preset subtitle** — `config.SUBTITLE_PRESETS`: mrbeast / hormozi / minimal /
+   karaoke / none; `subtitles.words_to_ass(..., style=...)`; karaoke = \kf
+   progressive fill dengan fix timing (durasi fill → start kata berikutnya).
+5. **Multi-aspek** — `config.ASPECTS` + `renderer.convert_aspect()` (blur-pad
+   face-safe); `jobs._render_one_clip` konversi final pass; `9:16|1:1|4:5`.
+6. **Endpoint baru** — `GET /styles`, `GET /jobs/{id}/zip` (ZIP semua clip +
+   `metadata.json` berisi caption/hashtag/skor).
+7. **Frontend** — form steer (topik + instruksi), selector style & aspek, kartu
+   clip dengan bar skor 5 dimensi, caption/hashtag + tombol copy, download ZIP.
+8. **`tests/smoke_render.py`** — uji rantai render end-to-end OFFLINE (sintetis
+   via lavfi): precise_trim, 5 preset ASS, burn efek, reframe 9:16, konversi
+   1:1/4:5, verifikasi, thumbnail. **PAS** di lingkungan bersih (Python 3.11,
+   ffmpeg 5.1, tanpa mediapipe/torch/Gemini).
 
 ## 0b. Changelog v0.2.2 (evaluasi pengguna: performa, AI, kamera, duo HF, subtitle)
 

@@ -61,6 +61,29 @@ detection, crop-follow 9:16 mux audio, parser VTT/SRT, ASS word-by-word, auto-ch
 
 ---
 
+## 2b. Changelog v0.3.0 — "Melampaui Semua Platform" (riset kompetitor, 2026-09-04)
+
+Dirancang dari analisis keluhan pengguna NYATA semua platform clipper
+(Opus "didn't use the good parts", Vizard "clips don't start or end correctly /
+repetitive", Klap "subscription tax", CapCut "auto captions are utter garbage",
+Munch "no support from a person"):
+
+1. **Human steer** — `ClipRequest.keywords` + `instruction`; keluhan #1 semua
+   platform = pemilihan momen meleset tanpa kontrol manusia.
+2. **Skor 5 dimensi** (`ClipScores`: hook/payoff/emotion/quotability/energy) —
+   transparan di UI per clip.
+3. **Caption + hashtag siap posting** dalam bahasa konten (USP untuk pasar
+   Indonesia — tidak ada pemain global yang sadar-bahasa).
+4. **Preset subtitle** `mrbeast|hormozi|minimal|karaoke|none` per job.
+5. **Export 1:1 / 4:5** (face-safe blur-pad, 1 pass murah) di samping 9:16.
+6. **Anti-repetitif** — prompt v2 melarang momen duplikat.
+7. **`GET /jobs/{id}/zip`** — semua clip + `metadata.json` dalam 1 klik
+   (keluhan nyata Vizard: tidak bisa download semua sekaligus).
+8. **`tests/smoke_render.py`** — rantai render terbukti bekerja offline tanpa
+   API key (menutup sebagian gap #1: sisa = uji jalur YouTube+Gemini nyata).
+9. **Timing karaoke** — durasi fill \k memakai start kata BERIKUTNYA (kata tetap
+   menyala melewati jeda alami, tidak padam di tengah kalimat).
+
 ## 3. KEKURANGAN / GAP yang diketahui (penting dibaca agent)
 
 > Ini daftar jujur hal-hal yang **belum beres**. Jangan dianggap sudah jalan.

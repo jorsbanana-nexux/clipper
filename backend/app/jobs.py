@@ -208,7 +208,8 @@ def _validate_duo_with_faces(timeline: list[dict], counts: list[tuple],
 
 async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, full_words,
                           work_dir, span_start: float = 0.0, span_end: float = 1.0,
-                          total_clips: int = 1):
+                          total_clips: int = 1, subtitle_style: str = "mrbeast",
+                          aspect: str = "9:16"):
     """Render a single clip end-to-end. Returns a ClipInfo, or raises on error.
 
     `span_start`/`span_end` delimit this clip's share of the overall progress bar
@@ -338,11 +339,14 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
                 local_words, timeline, compositor.CROSSFADE)
         # Build ASS after scaling and burn in a dedicated pass (needed here).
         if local_words:
-            Path(ass_path).write_text(
-                subtitles.words_to_ass(
-                    local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode),
-                encoding="utf-8")
-            await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
+            ass_doc = subtitles.words_to_ass(
+                local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode,
+                style=subtitle_style)
+            if ass_doc:
+                Path(ass_path).write_text(ass_doc, encoding="utf-8")
+                await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
+            else:
+                shutil.copy(vertical, final)
         else:
             shutil.copy(vertical, final)
     else:
@@ -351,15 +355,26 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         if local_words:
             job.update(status="rendering", stage=f"reframe_{index}/subs")
             report(0.55, "Membakar subtitle word-by-word")
-            Path(ass_path).write_text(
-                subtitles.words_to_ass(
-                    local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode),
-                encoding="utf-8")
+            ass_doc = subtitles.words_to_ass(
+                local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode,
+                style=subtitle_style)
+            if ass_doc:
+                Path(ass_path).write_text(ass_doc, encoding="utf-8")
+            else:
+                ass_path = None
         if timeline and timeline[0].get("layout") == "duo":
             await asyncio.to_thread(face_tracker.reframe_duo, raw_path, final, ass_path if local_words else None)
         else:
             samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
             await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, final, samples, ass_path if local_words else None)
+
+    # v0.3: convert the native 9:16 render to 1:1 / 4:5 when requested
+    # (one cheap, face-safe final pass: scale + blurred pad, no hard crop).
+    if aspect and aspect != "9:16":
+        report(0.80, f"Konversi aspek {aspect}")
+        converted = str(seg_dir / "final_aspect.mp4")
+        await asyncio.to_thread(renderer.convert_aspect, final, converted, aspect)
+        final = converted
 
     report(0.85, "Memverifikasi output")
     await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
@@ -368,7 +383,8 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     report(0.95, "Membuat thumbnail")
     await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
 
-    rel = f"/clips/{job.job_id}/clip_{index}/final.mp4"
+    final_name = Path(final).name
+    rel = f"/clips/{job.job_id}/clip_{index}/{final_name}"
     return ClipInfo(
         index=index,
         title=hl.title,
@@ -380,6 +396,9 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         hook=hl.hook,
         download_url=rel,
         filename=f"{job.job_id}_clip_{index}.mp4",
+        scores=hl.scores,
+        caption=hl.caption,
+        hashtags=hl.hashtags,
     )
 
 
@@ -449,6 +468,7 @@ async def _run_pipeline(job: Job, request) -> None:
             analyzer.find_viral_moments,
             analysis_segments, request.max_clips,
             config.MIN_CLIP_SEC, config.MAX_CLIP_SEC, analysis_turns,
+            keywords=request.keywords, instruction=request.instruction,
         )
         highlights = analysis.highlights[:request.max_clips]
         # CUT RULE (in code): trim trailing filler/dead air the LLM may have
@@ -474,7 +494,8 @@ async def _run_pipeline(job: Job, request) -> None:
                 clip = await _render_one_clip(
                     job, request.url, hl, i + 1,
                     used_captions, caption_lang, full_words, work_dir,
-                    span_start=span_start, span_end=span_end, total_clips=total)
+                    span_start=span_start, span_end=span_end, total_clips=total,
+                    subtitle_style=request.subtitle_style, aspect=request.aspect)
                 async with lock:
                     done += 1
                     job.update(progress=span_end,

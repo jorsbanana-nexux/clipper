@@ -1,12 +1,14 @@
-"""ASS subtitle generation — Mr Beast style word-by-word karaoke + pop animation.
+"""ASS subtitle generation — word-by-word karaoke styles + preset engine.
 
 Design goals (editor-aware, viewer-focused):
 - Big, ultra-bold, high-contrast text (thick dark outline + shadow) so it stays
   readable over any busy or facial background — no need to carefully avoid faces.
-- Word-by-word karaoke fill (`\\kf`): the ACTIVE (being-spoken) word fills with an
-  accent colour while the rest stay white.
-- Per-word scale POP (`\\t \\fscx/\\fscy`): the active word scales up then back,
-  the "punchy" Mr Beast feel that makes text glanceable on rewatch.
+- Word-by-word animation: the ACTIVE (being-spoken) word pops (scale bounce +
+  colour flash) while the rest stay white — the Mr Beast feel. The `karaoke`
+  preset instead keeps spoken words filled (progressive \\kf fill).
+- v0.3 STYLE PRESETS: mrbeast | hormozi | minimal | karaoke | none — selected
+  per job (ClipRequest.subtitle_style). Answers the "no creative control"
+  complaint every clipper platform gets.
 - Auto-fit: text is grouped so it never exceeds MAX_SUBTITLE_LINES (2) lines.
 - Positioning is layout-aware: `mode="duo"` lifts text into the safe center zone
   so it sits between the two split-screen faces instead of over the lower one.
@@ -18,9 +20,7 @@ from pathlib import Path
 from . import config
 
 # Sentence punctuation stripped from words so captions look clean and efficient.
-# Internal apostrophes are kept so contractions like "don't" stay readable.
 _PUNCT = re.compile(r"[.,!?;:…—–\u2026]+")
-_WORD_CHARS = r"\w'’"
 
 
 def _fmt_ts(seconds: float) -> str:
@@ -45,7 +45,7 @@ def _resolve_font(font_name: str) -> str:
 
 
 def _clean_word(word: str) -> str:
-    """STRICT Mr Beast style: subtitle text is 100% clean.
+    """STRICT clean style: subtitle text is 100% clean.
 
     ALL punctuation is removed — periods, commas, question marks, apostrophes,
     dashes, everything. Only letters/digits survive ("don't" -> "dont",
@@ -60,24 +60,24 @@ def _max_chars_per_line(width: int, font_size: int) -> int:
     return max(4, int(safe / per_char))
 
 
-def _build_groups(words: list[dict], width: int, height: int) -> list[list[dict]]:
-    """Group words into short cues (Mr Beast style, ~MAX_SUBTITLE_WORDS words).
+def _build_groups(words: list[dict], width: int, height: int, p: dict) -> list[list[dict]]:
+    """Group words into short cues, driven by the preset's pacing knobs.
 
     Pacing rules (viewer-friendly, adapts to speech speed):
-    - Target ~MAX_SUBTITLE_WORDS (2) words per cue by default.
-    - But a cue must stay on screen at least MIN_SUBTITLE_DUR seconds. When a
-      speaker talks FAST (so 2 words would flash by too quickly / feel chaotic),
+    - Target ~p["words"] words per cue by default.
+    - But a cue must stay on screen at least p["min_dur"] seconds. When a
+      speaker talks FAST (so the target word count would flash by too quickly),
       we keep joining words into the SAME cue until it meets the minimum duration
-      (capped at MAX_SUBTITLE_WORDS_OVERFLOW). When they talk SLOWLY, 2 words
-      naturally sit longer — calm, not rushed.
+      (capped at p["overflow"]). When they talk SLOWLY, fewer words sit longer —
+      calm, not rushed.
     - Also respects MAX_SUBTITLE_LINES (never wraps into a wall of text).
     """
-    size = config.SUBTITLE_SIZE
+    size = p["size"]
     budget = _max_chars_per_line(width, size)
     max_lines = max(1, config.MAX_SUBTITLE_LINES)
-    max_words = max(1, config.MAX_SUBTITLE_WORDS)
-    min_dur = max(0.0, config.MIN_SUBTITLE_DUR)
-    overflow = max(max_words, config.MAX_SUBTITLE_WORDS_OVERFLOW)
+    max_words = max(1, p["words"])
+    min_dur = max(0.0, p["min_dur"])
+    overflow = max(max_words, p["overflow"])
 
     def _lines_for(text: str) -> int:
         if not text:
@@ -117,27 +117,26 @@ def _build_groups(words: list[dict], width: int, height: int) -> list[list[dict]
     return groups
 
 
-def _word_tags(w: dict, line_start: float) -> str:
-    """Per-word Mr Beast animation: colour flash + bounce (100->120->95->100).
+def _pop_tags(w: dict, line_start: float, p: dict, next_start: float | None = None) -> str:
+    """Per-word pop animation: colour flash + bounce (100->POP->DIP->100).
 
     STRICT spec:
     - Every word renders WHITE with the style's thick black stroke. ONLY the
       word being spoken flashes to the accent colour, then returns to white
-      the moment the word ends. (The old \\kf karaoke kept spoken words
-      coloured forever — not the Mr Beast look.)
-    - Scale bounce synchronised per word: jump to 120% as the word starts,
-      dip to 95%, settle back to 100% exactly when the word ends.
+      the moment the word ends.
+    - Scale bounce synchronised per word, settling back to 100% exactly when
+      the word ends.
     All \\t() times are MILLISECONDS relative to the cue (Dialogue) start.
     """
-    peak = int(round(max(1.0, float(getattr(config, "SUBTITLE_POP", 1.20))) * 100))
-    dip = int(round(min(1.0, max(0.5, float(getattr(config, "SUBTITLE_DIP", 0.95)))) * 100))
+    peak = int(round(max(1.0, float(p.get("pop", 1.20))) * 100))
+    dip = int(round(min(1.0, max(0.5, float(p.get("dip", 0.95)))) * 100))
     ms0 = max(0, int(round((w["start"] - line_start) * 1000)))
     ms1 = max(ms0 + 40, int(round((w["end"] - line_start) * 1000)))
     span = ms1 - ms0
     t40 = ms0 + int(span * 0.4)
     t75 = ms0 + int(span * 0.75)
-    pop_col = config.SUBTITLE_POP_COLOR
-    base_col = config.SUBTITLE_BASE_COLOR
+    pop_col = p["pop_color"]
+    base_col = p["base_color"]
     # 40ms colour ramps read as instant on a phone but never flicker.
     return (
         f"{{\\t({ms0},{t40},\\fscx{peak}\\fscy{peak})"
@@ -148,28 +147,48 @@ def _word_tags(w: dict, line_start: float) -> str:
     )
 
 
-def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single") -> str:
-    font = _resolve_font(config.SUBTITLE_FONT)
-    size = config.SUBTITLE_SIZE
+def _karaoke_tags(w: dict, line_start: float, p: dict, next_start: float | None = None) -> str:
+    """Progressive-fill karaoke: spoken words STAY highlighted (\\kf).
+
+    The cue's SecondaryColour is the fill colour; \\kf fills the word over its
+    spoken duration, so words stay highlighted once spoken (classic karaoke).
+    """
+    fill_end = next_start if (next_start is not None and next_start > w["end"]) else w["end"]
+    dur_ms = max(20, int(round((fill_end - w["start"]) * 1000)))
+    delay_ms = max(0, int(round((w["start"] - line_start) * 1000)))
+    peak = int(round(max(1.0, float(p.get("pop", 1.10))) * 100))
+    return f"{{\\kf{dur_ms}\\t({delay_ms},{delay_ms + 40},\\fscx{peak}\\fscy{peak})}}"
+
+
+def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single",
+                 style: str = "mrbeast") -> str:
+    """Build the full ASS document for a clip.
+
+    `style` selects a config.SUBTITLE_PRESETS preset ("none" -> empty doc so
+    the render pipeline skips the burn-in entirely).
+    """
+    p = config.get_subtitle_preset(style)
+    if not p:  # "none"
+        return ""
+    font = _resolve_font(p.get("font", config.SUBTITLE_FONT))
+    size = p["size"]
+    uppercase = bool(p.get("uppercase", False))
 
     fontdir_line = ""
     if config.FONT_DIR and os.path.isdir(config.FONT_DIR):
         fontdir_line = f"fontsdir: {config.FONT_DIR}\n"
 
-    base_col = config.SUBTITLE_BASE_COLOR   # white — words not yet spoken
-    pop_col = config.SUBTITLE_POP_COLOR     # accent — the word being spoken
-    back_col = config.SUBTITLE_BACK_COLOR
-    outline = config.SUBTITLE_OUTLINE
-    shadow = config.SUBTITLE_SHADOW
+    base_col = p["base_color"]
+    pop_col = p["pop_color"]
+    back_col = p["back_color"]
+    outline = p["outline"]
+    shadow = p["shadow"]
     margin_lr = int(width * 0.03)
 
     # Layout-aware vertical position (editor/audience perspective):
     # - single: face sits in the upper area (headroom), so bottom ~13% is clear.
     # - duo:    faces occupy top & bottom bands; lift text into the center seam
     #           so it reads between the two speakers instead of over the lower one.
-    # STRICT Mr Beast placement: max 2 lines centred on the screen (never
-    # glued to the bottom edge). With \an2 (bottom-centre) this MarginV lifts
-    # the text block so it sits in the middle of the screen, below the face.
     if mode == "duo":
         margin_v = int(height * 0.46)   # center seam between the two faces
     else:
@@ -194,17 +213,21 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
 
-    groups = _build_groups(words, width, height)
+    groups = _build_groups(words, width, height, p)
+    tag_fn = _karaoke_tags if p.get("karaoke") else _pop_tags
     out = [header]
     for group in groups:
         start = group[0]["start"]
         end = group[-1]["end"]
         parts = []
-        for w in group:
+        for i, w in enumerate(group):
             cleaned = _clean_word(w["word"])
             if not cleaned:
                 continue
-            parts.append(f"{_word_tags(w, start)}{cleaned}")
+            if uppercase:
+                cleaned = cleaned.upper()
+            next_start = group[i + 1]["start"] if i + 1 < len(group) else None
+            parts.append(f"{tag_fn(w, start, p, next_start)}{cleaned}")
         if not parts:
             continue
         text = " ".join(parts)

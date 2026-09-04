@@ -1,9 +1,13 @@
 """Clipper backend — FastAPI application."""
+import io
+import json
 import os
 import shutil
+import zipfile
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
@@ -89,6 +93,63 @@ def get_job(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job.status
+
+
+@app.get("/styles")
+def list_styles():
+    """Subtitle style presets available for ClipRequest.subtitle_style."""
+    return {"styles": list(config.SUBTITLE_PRESETS.keys())}
+
+
+@app.get("/jobs/{job_id}/zip")
+def zip_job(job_id: str):
+    """Download ALL finished clips in one ZIP, plus metadata.json with each
+    clip's ready-to-post caption + hashtags (v0.3).
+
+    Answers a concrete Vizard complaint ("can't download all clips at once,
+    one by one only") and saves the creator the copy-paste round trip.
+    """
+    job = manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status.status != "done" or not job.status.clips:
+        raise HTTPException(status_code=400, detail="Job has no finished clips yet")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        meta = []
+        for c in job.status.clips:
+            abs_path = config.OUTPUT_DIR / job_id / f"clip_{c.index}" / f"{c.filename}"
+            # filename convention: {job}_clip_{i}.mp4, on disk the rendered
+            # file is final.mp4 (or final_aspect.mp4 after aspect conversion).
+            for cand in ("final_aspect.mp4", "final.mp4"):
+                p = config.OUTPUT_DIR / job_id / f"clip_{c.index}" / cand
+                if p.exists():
+                    abs_path = p
+                    break
+            if abs_path.exists():
+                zf.write(abs_path, arcname=c.filename)
+                meta.append({
+                    "file": c.filename,
+                    "index": c.index,
+                    "title": c.title,
+                    "start": c.start_time,
+                    "end": c.end_time,
+                    "duration_sec": c.duration,
+                    "viral_score": c.viral_score,
+                    "scores": c.scores.model_dump() if c.scores else {},
+                    "reason": c.reason,
+                    "hook": c.hook,
+                    "caption": c.caption,
+                    "hashtags": c.hashtags,
+                })
+        zf.writestr("metadata.json", json.dumps(meta, indent=2, ensure_ascii=False))
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="clips_{job_id}.zip"'},
+    )
 
 
 if __name__ == "__main__":

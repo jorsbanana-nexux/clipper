@@ -115,3 +115,25 @@ def probe_duration(video_path: str) -> float:
         return float(out.stdout.strip())
     except ValueError:
         return 0.0
+
+
+def convert_aspect(src: str, out_path: str, aspect: str) -> str:
+    """Convert the native 9:16 render to 1:1 or 4:5 in ONE cheap final pass.
+
+    Face-safe by construction: the vertical video is scaled to fit the target
+    width and padded with a blurred version of itself (never a hard crop that
+    could decapitate the speaker). 9:16 is a no-op copy.
+    """
+    dims = config.ASPECTS.get(aspect)
+    if not dims or dims == (config.TARGET_WIDTH, config.TARGET_HEIGHT):
+        shutil.copyfile(src, out_path)
+        return out_path
+    tw, th = dims
+    vf = (
+        f"split[bg][fg];"
+        f"[bg]scale={tw}:{th}:force_original_aspect_ratio=increase,"
+        f"crop={tw}:{th},gblur=sigma=20[bg];"
+        f"[fg]scale={tw}:-2[fg];"
+        f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+    )
+    return encode_video(src, out_path, vf, audio="copy")

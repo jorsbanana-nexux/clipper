@@ -2,9 +2,18 @@
 
 Backends: "gemini" (free Google AI Studio tier, default) or "openai".
 
-B2 (v0.2): when speaker turns (diarization) are provided, they are injected into
-the prompt so the model can (a) prefer two-person exchanges and (b) return which
-speaker(s) are active in each moment. This feeds dynamic layout selection.
+v0.2: speaker turns (diarization) are injected into the prompt so the model can
+(a) prefer two-person exchanges and (b) return which speaker(s) are active.
+
+v0.3 (research-driven — answers the top complaints about EVERY clipper
+platform: "AI picks the safe boring parts", "clips are repetitive",
+"no control", "bad metadata for posting"):
+- HUMAN STEER: optional user keywords + free-text editing instruction.
+- MULTI-DIMENSION SCORING (hook / payoff / emotion / quotability / energy).
+- DIVERSITY: the prompt explicitly forbids near-duplicate moments.
+- POSTING METADATA: a ready caption + hashtags in the CONTENT's language.
+- LANGUAGE-AWARE output (title/reason/hook/caption follow the content language,
+  e.g. Indonesian content -> Indonesian metadata — no global platform does this).
 """
 import json
 import time
@@ -54,7 +63,8 @@ def _format_turns(turns: list[dict], limit: int = 300) -> str:
     return "\n".join(lines)
 
 
-def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
+def _build_prompt(segments, max_clips, min_dur, max_dur, turns,
+                  keywords: str = "", instruction: str = "") -> str:
     has_turns = bool(turns)
     turns_block = _format_turns(turns) if has_turns else "(no speaker diarization available)"
     if has_turns:
@@ -69,6 +79,23 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
             "Speaker diarization is NOT available. Leave 'speaker' empty and "
             "'speakers' empty."
         )
+
+    # HUMAN STEER (v0.3): the user gets a vote BEFORE rendering. This is the
+    # single biggest differentiator vs Opus/Vizard/Klap, whose users constantly
+    # complain the AI "didn't use the good parts" with no way to steer it.
+    steer_block = ""
+    if (keywords or "").strip():
+        steer_block += (
+            f"\n        THE USER SPECIFICALLY WANTS CLIPS ABOUT: {keywords.strip()}\n"
+            "        Strongly prefer moments matching these topics when they exist; "
+            "use your own judgment ONLY when nothing genuinely good matches.\n"
+        )
+    if (instruction or "").strip():
+        steer_block += (
+            f"\n        THE USER'S EDITING INSTRUCTION (highest priority): {instruction.strip()}\n"
+            "        Follow it like a client brief from a paying customer.\n"
+        )
+
     return dedent("""
         You are an elite short-form video editor who thinks like a HUMAN editor,
         not a robot. Given a podcast transcript with timestamps, find the {max_clips}
@@ -82,7 +109,7 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
         - Each clip must be ONE complete thought with a clear arc: a strong hook
           up front, a build, and a satisfying payoff / punchline / takeaway at the
           end. A clip without a payoff feels flat and boring.
-
+        {steer_block}
         THE MEAT (mandatory structure per clip — no exceptions):
         - HOOK: the first seconds must grab ("wait, what did he just say?").
         - INTI: the core problem / surprising idea / the story being built.
@@ -97,6 +124,33 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
           topic change that comes AFTER the payoff. If the transcript shows a
           pause or the speaker trailing off, END THE CLIP THERE. Dead air at
           the end = a broken clip.
+
+        DIVERSITY (v0.3 — the #2 complaint is repetitive clips):
+        - The {max_clips} moments must cover DIFFERENT ideas/angles of the
+          conversation. Never return two moments about the same point.
+        - If the material only supports fewer good clips, return fewer —
+          5 excellent, distinct clips beat 8 repetitive ones.
+
+        SCORING (multi-dimension, be honest and calibrated):
+        - For every clip fill 'scores': hook (grab of the first seconds),
+          payoff (satisfaction of the ending), emotion (emotional charge),
+          quotability (shareable one-liner quality), energy (pacing / no dead
+          air). 1-10 each, no inflation — a mediocre moment must NOT get 8s.
+        - 'viral_score' = your overall 1-10 judgement, roughly the average of
+          the five dimensions for a real clip.
+
+        POSTING METADATA (v0.3 — creators need this to publish):
+        - 'caption': a ready-to-post social caption for THIS clip. Write it in
+          the SAME LANGUAGE as the video content. First-person, punchy, 1-2
+          sentences, NO hashtags inside the caption text.
+        - 'hashtags': 3-8 lowercase hashtags WITHOUT the '#' symbol, relevant
+          to the clip and likely searched by the target audience.
+
+        LANGUAGE RULE (critical — no global platform does this):
+        - Whatever language the CONTENT is in, write title, reason, hook,
+          caption and hashtags in THAT language. If the content is Indonesian,
+          metadata is Indonesian. If English, English. Mixed speech -> follow
+          the dominant language.
 
         - Each clip must be {min_dur}-{max_dur} seconds.
         - Use the EXACT timestamps from the transcript. Never invent times.
@@ -117,6 +171,7 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
         max_clips=max_clips,
         min_dur=int(min_dur),
         max_dur=int(max_dur),
+        steer_block=steer_block,
         segments=_format_segments(segments),
         turns=turns_block,
         speaker_instruction=speaker_instruction,
@@ -205,8 +260,10 @@ def _analyze_openai(prompt: str) -> HighlightAnalysis:
     return result
 
 
-def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None) -> HighlightAnalysis:
-    prompt = _build_prompt(segments, max_clips, min_dur, max_dur, turns)
+def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None,
+                       keywords: str = "", instruction: str = "") -> HighlightAnalysis:
+    prompt = _build_prompt(segments, max_clips, min_dur, max_dur, turns,
+                           keywords=keywords, instruction=instruction)
     backend = getattr(config, "ANALYSIS_BACKEND", "gemini")
     if backend == "gemini":
         return _analyze_gemini(prompt)

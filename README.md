@@ -58,6 +58,22 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Fase A hardening** — cut akurat, bundle font, verifikasi output, auto-detect bahasa, yt-dlp tangguh, cleanup. Checklist uji: [`docs/TESTING.md`](docs/TESTING.md).
 - **Deteksi bahasa otomatis** — Whisper auto-detect semua bahasa.
 
+**Baru di v0.3 — hasil riset semua platform clipper (Opus/Vizard/Klap/Munch):**
+- **Human steer** — beri topik/instruksi SEBELUM render ("AI-nya memilih bagian
+  membosankan" = keluhan #1 semua platform; di sini kamu punya suara).
+- **Skor viral 5 dimensi** — hook/payoff/emosi/quotable/energi, transparan di UI,
+  bukan sekadar angka 1-10 misterius.
+- **Caption + hashtag siap posting** — dibuat dalam BAHASA KONTEN (khususnya
+  Indonesia — tidak ada platform global yang melakukan ini), tinggal copy.
+- **4 preset subtitle** — MrBeast (pop kuning), Hormozi (besar hijau),
+  Karaoke (isi progresif), Minimal — atau tanpa subtitle. Per job, dari UI.
+- **Export multi-aspek** — 9:16 native, plus 1:1 & 4:5 (face-safe, blur-pad).
+- **Anti-klip-repetitif** — prompt melarang momen duplikat; lebih baik 5 clip
+  bagus & berbeda daripada 8 clip sama rasa.
+- **Download semua (ZIP)** + `metadata.json` (caption/hashtag/skor per clip).
+- **Smoke test offline** — `python tests/smoke_render.py` membuktikan rantai
+  render bekerja end-to-end TANPA internet & TANPA API key (gap #1 ROADMAP).
+
 ---
 
 ## 📁 Struktur Proyek
@@ -82,6 +98,8 @@ clipper/
 │   └── run.py               # Launcher
 ├── frontend/                # Next.js 15 (App Router)
 │   └── app/page.tsx         # Paste URL → progress → library unduh
+├── tests/
+│   └── smoke_render.py     # Uji rantai render end-to-end (offline, tanpa API key)
 ├── docs/
 │   └── REQUIREMENTS.md      # Spesifikasi, arsitektur, roadmap
 ├── .env.example             # Template konfigurasi (salin ke .env)
@@ -176,8 +194,10 @@ set BACKEND_URL=http://localhost:8000 && npm run dev   # Windows
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
-| `POST` | `/jobs` | Buat job: `{url, max_clips, mode}` |
-| `GET`  | `/jobs/{id}` | Status job + progress + daftar clip |
+| `POST` | `/jobs` | Buat job: `{url, max_clips, mode, keywords, instruction, subtitle_style, aspect}` |
+| `GET`  | `/jobs/{id}` | Status job + progress + daftar clip (skor 5 dimensi + caption + hashtag) |
+| `GET`  | `/jobs/{id}/zip` | Download SEMUA clip dalam 1 ZIP + metadata.json |
+| `GET`  | `/styles` | Daftar preset subtitle yang tersedia |
 | `GET`  | `/health` | Health check |
 | `GET`  | `/clips/...` | File clip & thumbnail (static) |
 
