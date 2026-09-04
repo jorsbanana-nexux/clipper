@@ -1,0 +1,19 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+fontsdir: /app/conversations/6a9a94b25483a3e04fcb5d70/repo/fonts
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Word,Komika Axis,100,&H00FFFFFF,&H0000FFFF,&H00000000,&H70141014,-1,0,0,0,100,100,0,0,1,8,3,2,32,32,883,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+
+Dialogue: 0,0:00:02.00,0:00:03.40,Word,,0,0,0,,{\t(0,160,\fscx120\fscy120)\t(160,300,\fscx95\fscy95)\t(300,400,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(400,440,\c&H00FFFFFF)}LIHAT {\t(500,660,\fscx120\fscy120)\t(660,800,\fscx95\fscy95)\t(800,900,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(900,940,\c&H00FFFFFF)}TRANSISINYA {\t(1000,1160,\fscx120\fscy120)\t(1160,1300,\fscx95\fscy95)\t(1300,1400,\fscx100\fscy100)\t(1000,1040,\c&H0000FFFF)\t(1400,1440,\c&H00FFFFFF)}SEKARANG
+Dialogue: 0,0:00:03.50,0:00:04.40,Word,,0,0,0,,{\t(0,160,\fscx120\fscy120)\t(160,300,\fscx95\fscy95)\t(300,400,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(400,440,\c&H00FFFFFF)}SPLIT {\t(500,660,\fscx120\fscy120)\t(660,800,\fscx95\fscy95)\t(800,900,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(900,940,\c&H00FFFFFF)}DUO
+Dialogue: 0,0:00:04.50,0:00:05.40,Word,,0,0,0,,{\t(0,160,\fscx120\fscy120)\t(160,300,\fscx95\fscy95)\t(300,400,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(400,440,\c&H00FFFFFF)}AKTIF {\t(500,660,\fscx120\fscy120)\t(660,800,\fscx95\fscy95)\t(800,900,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(900,940,\c&H00FFFFFF)}LALU
+Dialogue: 0,0:00:05.50,0:00:06.40,Word,,0,0,0,,{\t(0,160,\fscx120\fscy120)\t(160,300,\fscx95\fscy95)\t(300,400,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(400,440,\c&H00FFFFFF)}KEMBALI {\t(500,660,\fscx120\fscy120)\t(660,800,\fscx95\fscy95)\t(800,900,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(900,940,\c&H00FFFFFF)}SOLO
