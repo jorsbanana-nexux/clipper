@@ -43,6 +43,24 @@ def _ffmpeg_cut(src: str, start: float, end: float, out: str) -> str:
     return out
 
 
+def precise_trim(src: str, start: float, end: float, out: str) -> str:
+    """Re-encode trim to the EXACT [start, end] window (frame-accurate).
+
+    yt-dlp's range download / stream-copy can land on a keyframe PAST the chosen
+    end time, so the clip keeps running after the point and drags in irrelevant
+    trailing content. This trims to the precise window so the clip stops crisply
+    at the punchline.
+    """
+    dur = max(0.05, end - start)
+    cmd = [
+        FFMPEG, "-i", src, "-ss", str(start), "-t", str(dur),
+        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+        "-c:a", "aac", "-avoid_negative_ts", "make_zero", "-y", out,
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+    return out
+
+
 def _quiet_opts(extra: dict) -> dict:
     opts = {
         "quiet": True,

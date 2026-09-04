@@ -70,7 +70,19 @@ TARGET_HEIGHT: int = 1920
 
 # --- Subtitle style ---
 SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Montserrat")
-SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "80"))
+# Font size is auto-scaled to fit max 2 lines on the safe area. This is the
+# base size before auto-fit.
+SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "84"))
+# Max subtitle lines shown at once (2 = standard vertical-video safe area).
+MAX_SUBTITLE_LINES: int = int(os.environ.get("CLIPPER_SUBTITLE_LINES", "2"))
+# Karaoke word-pop colours. Base = colour of not-yet-spoken words (white);
+# pop = colour the ACTIVE (being-spoken) word fades to. In ASS the karaoke
+# fill uses SecondaryColour, so we set Base=Primary and Pop=Secondary.
+SUBTITLE_BASE_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BASE_COLOR", "&H00FFFFFF")
+SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H0030D6FF")
+SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "5"))
+# Back box opacity (semi-transparent) behind text for readability on any frame.
+SUBTITLE_BACK_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BACK_COLOR", "&H80000000")
 
 # --- Multi-speaker (v0.2) ---
 # Diarization is OPTIONAL and heavy (torch). Enable only if you have a
@@ -101,3 +113,34 @@ YDL_RETRIES: int = int(os.environ.get("YDL_RETRIES", "3"))
 
 # Clip rendering concurrency. Default 1 (sequential) = low-spec friendly.
 MAX_PARALLEL: int = int(os.environ.get("CLIPPER_MAX_PARALLEL", "3"))
+
+# --- Face framing (camera) ---
+# Zoom-out factor for the 9:16 crop-follow. 1.0 = tight full-height fill (face
+# fills frame); <1.0 zooms out: subject is scaled down and placed on a blurred
+# background with headroom, so the face is smaller and framing is comfortable.
+FACE_ZOOM: float = float(os.environ.get("CLIPPER_FACE_ZOOM", "0.86"))
+# Camera smoothing: alpha of the exponential moving average on face centre-x
+# (lower = smoother/slower to catch up; higher = snappier/more jitter).
+FACE_SMOOTH_ALPHA: float = float(os.environ.get("CLIPPER_FACE_SMOOTH", "0.28"))
+# Headroom: where the subject sits vertically on the canvas (0=top, 1=bottom).
+FACE_HEADROOM: float = float(os.environ.get("CLIPPER_FACE_HEADROOM", "0.30"))
+
+# --- Duo split-screen ---
+# Pre-switch: how many seconds BEFORE the 2nd speaker's turn the screen should
+# already be split, so the transition is smooth and never feels late.
+DUO_LEAD_SEC: float = float(os.environ.get("CLIPPER_DUO_LEAD_SEC", "2.5"))
+# Auto-duo fallback: when diarization is unavailable/fails, switch to split-screen
+# automatically if two faces are detected. Lets duo work WITHOUT a HuggingFace
+# token (this fixes "split-screen never appears even though I set the token").
+DUO_AUTO_FACES: bool = os.environ.get("CLIPPER_DUO_AUTO_FACES", "1") in ("1", "true", "yes", "on")
+# Min fraction of sampled frames that must show 2 faces before auto-duo kicks in.
+DUO_AUTO_FACE_RATIO: float = float(os.environ.get("CLIPPER_DUO_AUTO_FACE_RATIO", "0.35"))
+
+# --- Cut accuracy ---
+# After downloading a segment, re-trim it precisely to the exact [start, end]
+# window so the video NEVER runs past the chosen point (fixes keyframe overshoot
+# that made clips include irrelevant trailing content).
+PRECISE_TRIM: bool = os.environ.get("CLIPPER_PRECISE_TRIM", "1") in ("1", "true", "yes", "on")
+# Trailing padding after the highlighted moment (small = clip stops crisply at
+# the punchline instead of rambling on). Head padding stays at PADDING_SEC.
+TAIL_SEC: float = float(os.environ.get("CLIPPER_TAIL_SEC", "0.35"))

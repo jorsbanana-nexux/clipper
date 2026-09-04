@@ -91,15 +91,25 @@ def _cleanup_old_jobs() -> None:
 
 async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, full_words, work_dir):
     """Render a single clip end-to-end. Returns a ClipInfo, or raises on error."""
-    pad = config.PADDING_SEC
-    padded_start = max(0.0, hl.start_time - pad)
-    padded_end = hl.end_time + pad
+    head_pad = config.PADDING_SEC
+    tail_pad = getattr(config, "TAIL_SEC", 0.35)
+    padded_start = max(0.0, hl.start_time - head_pad)
+    # Small trailing padding so the clip stops crisply at the punchline instead
+    # of rambling on past the chosen moment.
+    padded_end = hl.end_time + tail_pad
 
     seg_dir = work_dir / f"clip_{index}"
     seg_dir.mkdir(exist_ok=True)
 
     raw_path = await asyncio.to_thread(
         downloader.download_segment, url, padded_start, padded_end, str(seg_dir))
+
+    # Precise trim to the exact window: yt-dlp range download can land on a
+    # keyframe PAST the end, dragging irrelevant trailing content into the clip.
+    if getattr(config, "PRECISE_TRIM", True):
+        trimmed = str(seg_dir / "seg_trim.mp4")
+        raw_path = await asyncio.to_thread(
+            downloader.precise_trim, raw_path, 0.0, padded_end - padded_start, trimmed)
 
     local_words: list[dict] = []
     aseg: str | None = None
@@ -119,32 +129,48 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         ]
 
     turns: list[dict] = []
+    diar_note = ""
     if diarization.diarization_available():
         try:
             diar_audio = str(seg_dir / "diar_audio.wav")
             diar_src = aseg if aseg else raw_path
             await asyncio.to_thread(renderer.cut_audio, diar_src, 0.0, padded_end - padded_start, diar_audio)
             turns = await asyncio.to_thread(diarization.diarize, diar_audio)
-        except Exception:
-            turns = []
+            if not turns:
+                diar_note = "diarization returned no speaker turns"
+        except Exception as e:
+            # Never fail the clip; report why duo may be off so the user isn't
+            # left guessing why split-screen didn't appear.
+            diar_note = f"diarization unavailable/failed: {e}"
 
+    loc_dur = padded_end - padded_start
+    timeline = None
     if config.LAYOUT_MODE in ("single", "duo"):
         clip_layout = config.LAYOUT_MODE
-        timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
+        timeline = [{"start": 0.0, "end": loc_dur, "layout": clip_layout}]
     elif turns:
-        # FIX(bug): `turns` are LOCAL — they come from `cut_audio(diar_src,
-        # 0.0, padded_len)` on the already-downloaded segment, so time 0 is the
-        # start of `raw_path` (== padded_start in the absolute video). The
-        # layout timeline must therefore be computed in LOCAL coordinates too.
-        # Previously we built it from absolute hl times and then subtracted
-        # padded_start again in rel_timeline — a double-shift that misaligned
-        # the single/duo switches.
-        loc_dur = padded_end - padded_start
-        timeline = layout.layout_timeline(turns, 0.0, loc_dur)
+        # `turns` are LOCAL (cut from the already-downloaded segment), so time 0
+        # is the start of `raw_path`. Dynamic timeline: duo when 2+ speakers talk
+        # (split appears `lead` BEFORE the 2nd speaker so it's never late), and
+        # closes back to solo when a speaker is alone for too long.
+        timeline = layout.layout_timeline(turns, 0.0, loc_dur, config.DUO_LEAD_SEC)
         timeline = [s for s in timeline if s["end"] > s["start"]]
-    else:
+    elif getattr(config, "DUO_AUTO_FACES", True):
+        # Free fallback so split-screen works WITHOUT diarization/token: if two
+        # faces are consistently visible, auto-switch the whole clip to duo.
+        duo_ratio = getattr(config, "DUO_AUTO_FACE_RATIO", 0.35)
+        try:
+            two = await asyncio.to_thread(face_tracker.has_two_speakers, raw_path, duo_ratio)
+        except Exception:
+            two = False
+        if two:
+            timeline = [{"start": 0.0, "end": loc_dur, "layout": "duo"}]
+            job.update(message=f"Clip {index}: 2 wajah terdeteksi -> split-screen (auto-duo)")
+        if diar_note:
+            job.update(message=f"Clip {index}: {diar_note}")
+    if timeline is None:
         clip_layout = layout.choose_template([], 0.0, 0.0)
-        timeline = [{"start": 0.0, "end": padded_end - padded_start, "layout": clip_layout}]
+        timeline = [{"start": 0.0, "end": loc_dur, "layout": clip_layout}]
 
     vertical = str(seg_dir / "vertical.mp4")
     distinct = {s.get("layout") for s in timeline}

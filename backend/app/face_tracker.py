@@ -188,6 +188,28 @@ def _smooth_series(cxs: list[float], window: int = 5) -> list[float]:
     return out
 
 
+def _ema_smooth(cxs: list[float], alpha: float = 0.28) -> list[float]:
+    """Exponential moving average — smoother pans than a flat window and easier
+    to tune (alpha 0..1; lower = smoother/slower, higher = snappier)."""
+    if not cxs:
+        return []
+    out = [cxs[0]]
+    for v in cxs[1:]:
+        out.append(out[-1] + alpha * (v - out[-1]))
+    return out
+
+
+def has_two_speakers(video_path: str, min_ratio: float = 0.35,
+                     sample_interval: float = 0.5) -> bool:
+    """True when two faces are visible in >= min_ratio of sampled frames.
+    Used as a diarization-free fallback to auto-enable split-screen duo."""
+    frames = analyze_faces_all(video_path, sample_interval)
+    if not frames:
+        return False
+    two = sum(1 for f in frames if len(f.faces) >= 2)
+    return two / len(frames) >= min_ratio
+
+
 def _xcx_at(t, ts: list[float], cxs: list[float]) -> float:
     """Interpolate a centre-x series at time t."""
     if not ts:
@@ -265,28 +287,43 @@ def _reframe_crop_follow(video_path, output_path, samples):
     Root cause of "Unknown C++ exception from OpenCV": reading/writing frames
     through cv2.VideoCapture / cv2.VideoWriter — OpenCV's bundled decoder crashes
     on certain H.264/VP9 frames. Here we DECODE with system ffmpeg (reliable) to
-    raw BGR frames, crop with cv2.resize on guaranteed-valid numpy arrays, then
-    ENCODE with system ffmpeg. Smooth per-frame face-follow and audio sync are
-    preserved; the crash source is removed.
+    raw BGR frames, process with cv2 on guaranteed-valid numpy arrays, then ENCODE
+    with system ffmpeg. Audio is muxed back from the source (stays in sync).
 
-    Blur-pad is used only when the source is geometrically too narrow to crop
-    (sw < TW) — a legitimate aspect-ratio choice, not an error fallback.
+    Framing improvements (from evaluation):
+    - ZOOM-OUT: the subject is placed at ~FACE_ZOOM of the canvas height on a
+      blurred background with headroom, so the face is smaller and comfortable
+      instead of an aggressive full-height closeup.
+    - SMOOTH, DIRECTED pans: centre-x is EMA-smoothed (FACE_SMOOTH_ALPHA) and
+      per-frame movement is clamped, so the camera glides to the speaker and
+      never jerks or lags behind.
+    - Blur-pad is used only when the source is geometrically too narrow to crop.
     """
     if not samples:
         return _reframe_blur_pad(video_path, output_path)
     ts = [s.t for s in samples]
-    cxs = _smooth_series([s.cx for s in samples])
+    cxs = _ema_smooth([s.cx for s in samples], config.FACE_SMOOTH_ALPHA)
     W, H = _probe_dims(video_path)
     if W <= 0 or H <= 0:
         return _reframe_blur_pad(video_path, output_path)
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
+    zoom = config.FACE_ZOOM
+    if zoom <= 0.0 or zoom > 1.0:
+        zoom = 1.0
+    headroom = float(np.clip(config.FACE_HEADROOM, 0.0, 0.5))
 
-    scale = TH / H
-    sw = int(round(W * scale))
-    max_crop_x = sw - TW
-    if max_crop_x < 0:
-        # source not wide enough for 9:16 after scaling -> blur-pad is correct
+    # Full-height 9:16 region (same aspect as output -> no distortion).
+    region_w = int(round(H * TW / TH))
+    if region_w < 8:
         return _reframe_blur_pad(video_path, output_path)
+    max_crop_x = W - region_w
+    if max_crop_x < 0:
+        return _reframe_blur_pad(video_path, output_path)
+
+    fg_w = max(8, int(round(TW * zoom)))
+    fg_h = max(8, int(round(TH * zoom)))
+    fg_x = max(0, (TW - fg_w) // 2)
+    fg_y = int((TH - fg_h) * headroom)
 
     fps = _probe_fps(video_path)
     frame_bytes = W * H * 3
@@ -304,6 +341,8 @@ def _reframe_crop_follow(video_path, output_path, samples):
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     idx = 0
+    prev_crop = None
+    max_move = max(2.0, region_w * 0.18)
     try:
         while True:
             raw = dec.stdout.read(frame_bytes)
@@ -312,11 +351,20 @@ def _reframe_crop_follow(video_path, output_path, samples):
             frame = np.frombuffer(raw, np.uint8).reshape((H, W, 3))
             t = idx / fps
             cx = _xcx_at(t, ts, cxs)
-            crop_x = int(np.clip(cx * sw - TW / 2, 0, max_crop_x))
-            crop_x -= crop_x % 2
-            scaled = cv2.resize(frame, (sw, TH), interpolation=cv2.INTER_AREA)
-            cropped = scaled[:, crop_x:crop_x + TW]
-            enc.stdin.write(cropped.tobytes())
+            target = int(np.clip(cx * W - region_w / 2, 0, max_crop_x))
+            target -= target % 2
+            if prev_crop is not None:
+                target = int(np.clip(target, prev_crop - max_move, prev_crop + max_move))
+                target -= target % 2
+            prev_crop = target
+
+            region = frame[:, target:target + region_w]
+            fg = cv2.resize(region, (fg_w, fg_h), interpolation=cv2.INTER_AREA)
+            # Blurred background = same scene scaled to canvas + strong blur.
+            bg = cv2.resize(frame, (TW, TH), interpolation=cv2.INTER_AREA)
+            bg = cv2.GaussianBlur(bg, (0, 0), sigmaX=18)
+            bg[fg_y:fg_y + fg_h, fg_x:fg_x + fg_w] = fg
+            enc.stdin.write(bg.tobytes())
             idx += 1
     finally:
         dec.stdout.close()

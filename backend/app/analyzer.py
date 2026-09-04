@@ -49,17 +49,30 @@ def _build_prompt(segments, max_clips, min_dur, max_dur, turns) -> str:
             "'speakers' empty."
         )
     return dedent("""
-        You are an elite short-form video editor. Given a podcast transcript with
-        timestamps, pick the {max_clips} most viral-worthy, emotionally engaging
-        moments that would make people rewatch and share.
+        You are an elite short-form video editor who thinks like a HUMAN editor,
+        not a robot. Given a podcast transcript with timestamps, find the {max_clips}
+        moments that a skilled clip editor would actually cut — the "meat" of the
+        conversation that makes people stop scrolling, rewatch and share.
 
-        Rules:
-        - Each clip must be {min_dur}-{max_dur} seconds and capture ONE complete thought.
-        - Prefer: strong hooks, surprising claims, quotable lines, emotional peaks,
-          concrete tips, conflicts, or payoffs.
-        - Use the exact timestamps from the transcript. Never invent times.
+        HOW A HUMAN EDITOR THINKS (follow this mindset):
+        - Hunt for the SUBSTANCE, not surface noise. Pick moments that deliver a
+          genuinely valuable, surprising or emotionally charged idea — not mere
+          transitions, greetings, small talk, or rambling filler.
+        - Each clip must be ONE complete thought with a clear arc: a strong hook
+          up front, a build, and a satisfying payoff / punchline / takeaway at the
+          end. A clip without a payoff feels flat and boring.
+
+        CUT TIMING (accuracy matters — this is the #1 complaint):
+        - Choose the START at the first word of the thought (never mid-sentence).
+        - Choose the END EXACTLY when the point lands / the punchline is delivered.
+          Do NOT extend past it — trailing words after the payoff kill the clip.
+        - Each clip must be {min_dur}-{max_dur} seconds.
+        - Use the EXACT timestamps from the transcript. Never invent times.
         - Avoid overlaps between clips.
-        - Return them ranked by viral potential (best first).
+
+        Prefer moments with: strong hooks, surprising claims, quotable lines,
+        emotional peaks, concrete actionable tips, conflicts, or payoffs.
+        Rank them by viral potential (best first).
 
         {speaker_instruction}
 
