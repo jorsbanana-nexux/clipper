@@ -36,7 +36,12 @@ WHISPER_MODEL_SIZE: str = os.environ.get("WHISPER_MODEL_SIZE", "small")
 ANALYSIS_BACKEND: str = os.environ.get("ANALYSIS_BACKEND", "gemini")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
 # Current, non-deprecated Gemini model (gemini-2.x/1.5 are removed/404).
-GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+# Higher-quality FREE option: gemini-3.8-flash is Google's most intelligent
+# Flash model (best for complex analysis like viral-moment detection) and is
+# still free on the AI Studio free tier. Slower fallbacks: gemini-3.7-flash,
+# gemini-3.6-flash. Use gemini-2.5-pro for max reasoning if you accept stricter
+# free-tier rate limits (it is also free).
+GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 # Auto-retry count on transient Gemini errors (503 high demand / 429 quota).
 GEMINI_RETRIES: int = int(os.environ.get("GEMINI_RETRIES", "4"))
 
