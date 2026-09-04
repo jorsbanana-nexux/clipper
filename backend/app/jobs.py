@@ -43,8 +43,18 @@ class Job:
         self.status = JobStatus(job_id=job_id, status="queued")
         self.task: asyncio.Task | None = None
         self._cancel = False
+        # Highest progress ever published. Used to keep the loading bar strictly
+        # monotonic (never regresses) even when workers update in parallel.
+        self._max_progress = 0.0
 
     def update(self, **kw):
+        # Clamp progress so it never goes backwards (real, honest indicator).
+        if "progress" in kw:
+            p = max(0.0, min(1.0, float(kw["progress"])))
+            if p < self._max_progress:
+                p = self._max_progress
+            self._max_progress = p
+            kw["progress"] = p
         for k, v in kw.items():
             setattr(self.status, k, v)
 
@@ -115,8 +125,20 @@ def _validate_duo_with_faces(timeline: list[dict], counts: list[tuple],
     return merged
 
 
-async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, full_words, work_dir):
-    """Render a single clip end-to-end. Returns a ClipInfo, or raises on error."""
+async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, full_words,
+                          work_dir, span_start: float = 0.0, span_end: float = 1.0,
+                          total_clips: int = 1):
+    """Render a single clip end-to-end. Returns a ClipInfo, or raises on error.
+
+    `span_start`/`span_end` delimit this clip's share of the overall progress bar
+    (0..1). `report(frac)` is a helper that publishes monotonic progress within
+    that span and a message, so the loading indicator moves in REAL time through
+    each sub-stage of the clip instead of freezing until it finishes.
+    """
+    def report(frac: float, msg: str):
+        p = span_start + (span_end - span_start) * max(0.0, min(1.0, frac))
+        job.update(progress=p, message=f"{msg} ({index}/{total_clips})")
+
     head_pad = config.PADDING_SEC
     tail_pad = getattr(config, "TAIL_SEC", 0.35)
     padded_start = max(0.0, hl.start_time - head_pad)
@@ -127,6 +149,7 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     seg_dir = work_dir / f"clip_{index}"
     seg_dir.mkdir(exist_ok=True)
 
+    report(0.05, "Mengunduh segmen video")
     raw_path = await asyncio.to_thread(
         downloader.download_segment, url, padded_start, padded_end, str(seg_dir))
 
@@ -134,6 +157,7 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     # keyframe PAST the end, dragging irrelevant trailing content into the clip.
     if getattr(config, "PRECISE_TRIM", True):
         trimmed = str(seg_dir / "seg_trim.mp4")
+        report(0.10, "Trim presisi segmen")
         raw_path = await asyncio.to_thread(
             downloader.precise_trim, raw_path, 0.0, padded_end - padded_start, trimmed)
 
@@ -141,6 +165,7 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     aseg: str | None = None
     if used_captions:
         try:
+            report(0.15, "Mendapatkan audio + transkrip kata")
             aseg = await asyncio.to_thread(
                 downloader.download_audio_segment, url, padded_start, padded_end, str(seg_dir))
             t = await asyncio.to_thread(transcriber.transcribe, aseg, caption_lang)
@@ -219,8 +244,8 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     ass_path = str(seg_dir / "subs.ass")
     sub_mode = "duo" if any(s.get("layout") == layout.LAYOUT_DUO for s in timeline) else "single"
 
-    job.update(status="rendering", stage=f"render_{index}/reframe",
-               message=f"Clip {index}: membingkai ulang 9:16 + tracking wajah")
+    job.update(status="rendering", stage=f"render_{index}/reframe")
+    report(0.35, "Membingkai ulang 9:16")
     if dynamic_layout:
         await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
         # xfade shortens the output by (n-1)*CROSSFADE -> rescale subtitle times
@@ -247,8 +272,8 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         # Non-dynamic: fold subtitle + effects into the SAME reframe pass ->
         # ONE encode instead of two (the core batch speedup).
         if local_words:
-            job.update(status="rendering", stage=f"reframe_{index}/subs",
-                       message=f"Clip {index}: membakar subtitle word-by-word + efek")
+            job.update(status="rendering", stage=f"reframe_{index}/subs")
+            report(0.55, "Membakar subtitle word-by-word")
             Path(ass_path).write_text(
                 subtitles.words_to_ass(
                     local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode),
@@ -259,9 +284,11 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
             samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
             await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, final, samples, ass_path if local_words else None)
 
+    report(0.85, "Memverifikasi output")
     await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
 
     thumb = str(seg_dir / "thumb.jpg")
+    report(0.95, "Membuat thumbnail")
     await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
 
     rel = f"/clips/{job.job_id}/clip_{index}/final.mp4"
@@ -339,15 +366,18 @@ async def _run_pipeline(job: Job, request) -> None:
             async with sem:
                 if job._cancel:
                     return None
-                job.update(status="rendering", stage=f"render_{i + 1}",
-                           progress=0.45 + 0.55 * (i / total),
-                           message=f"Rendering clip {i + 1}/{total}: {hl.title}")
+                job.update(status="rendering", stage=f"render_{i + 1}")
+                # Give this clip its own share of the bar [0.45, 1.0], so each
+                # clip reports fine-grained progress through its own sub-stages.
+                span_start = 0.45 + 0.55 * (i / total)
+                span_end = 0.45 + 0.55 * ((i + 1) / total)
                 clip = await _render_one_clip(
                     job, request.url, hl, i + 1,
-                    used_captions, caption_lang, full_words, work_dir)
+                    used_captions, caption_lang, full_words, work_dir,
+                    span_start=span_start, span_end=span_end, total_clips=total)
                 async with lock:
                     done += 1
-                    job.update(progress=0.45 + 0.55 * (done / total),
+                    job.update(progress=span_end,
                                message=f"Rendered {done}/{total} clips")
                 return clip
 
