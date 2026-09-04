@@ -297,11 +297,42 @@ def _analyze_openai(prompt: str) -> HighlightAnalysis:
 
 def find_viral_moments(segments, max_clips, min_dur, max_dur, turns=None,
                        keywords: str = "", instruction: str = "") -> HighlightAnalysis:
+    """Pick the viral moments — with a HARD offline guarantee (v0.4).
+
+    v0.4: the analysis can no longer kill the pipeline. Every commercial
+    clipper needs a cloud key; Clipper now has three tiers:
+      1. ANALYSIS_BACKEND=local         -> offline heuristic analyzer only.
+      2. gemini/openai with a valid key  -> LLM analysis (best quality).
+      3. LLM key missing OR the call fails for ANY reason -> automatic
+         fallback to the offline heuristic analyzer. The job NEVER dies with
+         "GEMINI_API_KEY not set" or a 503 storm again.
+    """
+    from . import analyzer_local
+    backend = getattr(config, "ANALYSIS_BACKEND", "gemini").strip().lower()
+
+    if backend == "local":
+        return analyzer_local.analyze(segments, max_clips, min_dur, max_dur,
+                                      keywords=keywords, instruction=instruction)
+
     prompt = _build_prompt(segments, max_clips, min_dur, max_dur, turns,
                            keywords=keywords, instruction=instruction)
-    backend = getattr(config, "ANALYSIS_BACKEND", "gemini")
-    if backend == "gemini":
-        return _analyze_gemini(prompt)
-    if backend == "openai":
-        return _analyze_openai(prompt)
-    raise RuntimeError(f"Unknown ANALYSIS_BACKEND: {backend}")
+    key_ready = (config.GEMINI_API_KEY if backend == "gemini" else config.OPENAI_API_KEY)
+    if not key_ready:
+        # No key configured: go straight to the offline path (no exception, no
+        # 500 — the job just works).
+        return analyzer_local.analyze(segments, max_clips, min_dur, max_dur,
+                                      keywords=keywords, instruction=instruction)
+    try:
+        if backend == "gemini":
+            return _analyze_gemini(prompt)
+        if backend == "openai":
+            return _analyze_openai(prompt)
+    except Exception as e:
+        # Key was set but the API failed (quota, 503 storm, model retired,
+        # network down...). Degrade gracefully to offline instead of dying.
+        import sys
+        print(f"[analyzer] {backend} failed ({e}); falling back to the offline "
+              f"heuristic analyzer", file=sys.stderr)
+    # unknown backend, or the API call above failed -> offline guarantees the job
+    return analyzer_local.analyze(segments, max_clips, min_dur, max_dur,
+                                  keywords=keywords, instruction=instruction)

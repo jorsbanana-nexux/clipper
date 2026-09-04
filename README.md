@@ -61,6 +61,35 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Fase A hardening** — cut akurat, bundle font, verifikasi output, auto-detect bahasa, yt-dlp tangguh, cleanup. Checklist uji: [`docs/TESTING.md`](docs/TESTING.md).
 - **Deteksi bahasa otomatis** — Whisper auto-detect semua bahasa.
 
+**Baru di v0.4 — SUPERCLIP (verifikasi end-to-end fase A & B lolos):**
+- **Mode 100% OFFLINE — nol API key.** Analisis momen viral kini punya jalur
+  heuristic lokal (`analyzer_local.py`): segmentasi kalimat + skor hook/payoff/
+  emosi/quotability/energi + deteksi punchline (jeda setelah kata terakhir) +
+  filter anti-klip-repetitif. Tanpa `GEMINI_API_KEY`? **Job tetap jalan**
+  (otomatis fallback; tidak ada lagi error 500). API Gemini/OpenAI gagal/503?
+  **Fallback senyap ke mode offline** — pipeline tidak pernah mati. Tidak ada
+  platform clipper komersial yang bisa jalan tanpa cloud; ini bisa.
+- **Hook title overlay** — headline besar di atas clip selama ~3,5 detik pertama
+  (trik retensi para top creator), terbakar dalam SATU encode yang sama.
+- **Progress bar animasi** — bar aksen tipis di tepi atas yang mengisi sepanjang
+  clip (sinyal retensi "payoff sebentar lagi"). Terverifikasi per-piksel.
+- **Loudness normalization (EBU R128, -14 LUFS)** — standar pemutaran
+  TikTok/Shorts/Reels; clip dari sumber beda tidak lagi melompat volumenya.
+- **Thumbnail berjudul** — thumbnail kini membakar hook sebagai headline tebal
+  (bukan lagi frame polos).
+- **Export SRT** — tiap clip disertai `subs.srt` portabel (CapCut/Premiere/
+  closed-caption), ikut dalam ZIP.
+- **Emoji captions (opt-in)** — ala Submagic, `CLIPPER_EMOJI=1` (butuh font
+  emoji di sistem, default OFF agar tidak kotak kosong).
+- **UI satu alur lurus** — tempel URL → jadi. Tanpa opsi optional, tanpa pilihan
+  gaya: preset flagship (MrBeast · 9:16 · 8 clip) berjalan langsung. Kini ada
+  **preview video per clip** (bisa diputar sebelum unduh) + salin caption.
+- **Bugfix**: `openai` kini lazy-import (mode gratis tanpa openai tidak crash),
+  `POST /jobs` tanpa API key tidak 500, versi API disinkronkan ke v0.4.0.
+- **Test end-to-end baru** — `python tests/smoke_pipeline_e2e.py` menjalankan
+  pipeline NYATA dari transkrip → analisis offline → render → verify, offline
+  tanpa API key (fase A + B terverifikasi dari ujung ke ujung).
+
 **Baru di v0.3 — hasil riset semua platform clipper (Opus/Vizard/Klap/Munch):**
 - **Human steer** — beri topik/instruksi SEBELUM render ("AI-nya memilih bagian
   membosankan" = keluhan #1 semua platform; di sini kamu punya suara).
@@ -103,7 +132,7 @@ clipper/
 │   │   └── renderer.py      # ffmpeg clip + efek + thumbnail + verify
 │   └── run.py               # Launcher
 ├── frontend/                # Next.js 15 (App Router)
-│   └── app/page.tsx         # Paste URL → progress → library unduh
+│   └── app/page.tsx         # Satu alur lurus: paste URL → progress → preview & unduh
 ├── tests/
 │   └── smoke_render.py     # Uji rantai render end-to-end (offline, tanpa API key)
 ├── docs/
@@ -200,7 +229,7 @@ set BACKEND_URL=http://localhost:8000 && npm run dev   # Windows
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
-| `POST` | `/jobs` | Buat job: `{url, max_clips, mode, keywords, instruction, subtitle_style, aspect}` |
+| `POST` | `/jobs` | Buat job: `{url, max_clips, mode, keywords, instruction, subtitle_style, aspect}` — **tanpa API key pun diterima** (mode offline otomatis) |
 | `GET`  | `/jobs/{id}` | Status job + progress + daftar clip (skor 5 dimensi + caption + hashtag) |
 | `GET`  | `/jobs/{id}/zip` | Download SEMUA clip dalam 1 ZIP + metadata.json |
 | `GET`  | `/styles` | Daftar preset subtitle yang tersedia |

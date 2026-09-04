@@ -181,8 +181,146 @@ def _karaoke_tags(w: dict, line_start: float, p: dict, next_start: float | None 
     return f"{{\\kf{dur_ms}\\t({delay_ms},{delay_ms + 40},\\fscx{peak}\\fscy{peak})}}"
 
 
+
+# ============================ v0.4 SUPERCLIP LAYER ============================
+# Hook title overlay + animated progress bar — the retention visuals every
+# commercial clipper charges for, generated as plain ASS (still ONE encode).
+
+_HOOK_SAFE_TOP = 0.085   # hook text baseline (fraction of height) — below the
+                         # platform UI strip, above faces at headroom.
+_BAR_MARGIN = 0.050      # progress bar side margins (fraction of width)
+_BAR_H = 10              # progress bar thickness (px @ PlayResY)
+
+
+def _hook_events(hook_text: str, duration: float, width: int, height: int,
+                 p: dict, font: str) -> list[str]:
+    """Dialogue events for the top HOOK title: pops in, holds ~3.5s, fades out.
+
+    Reads as a poster headline: big, bold, max 2 lines, thick outline, no
+    punctuation (consistent with the strict caption style).
+    """
+    raw = (hook_text or "").strip()
+    if not raw:
+        return []
+    text = re.sub(r"\s+", " ", raw)
+    text = re.sub(r"[.!?…]+$", "", text).strip()
+    if p.get("uppercase", False):
+        text = text.upper()
+    size = min(84, max(56, int(p.get("size", 100) * 0.60)))
+    budget = max(8, int((width * 0.9) / (size * 0.52)))
+    words = text.split()
+    lines, cur = [], ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > budget:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+        if len(lines) == 2:
+            break
+    if cur and len(lines) < 2:
+        lines.append(cur)
+    text = "\\N".join(l for l in lines if l)
+    if not text:
+        return []
+    show = min(3.8, max(2.2, duration * 0.5))
+    fad_ms = 160
+    return [(
+        f"Dialogue: 1,{_fmt_ts(0.0)},{_fmt_ts(show)},Hook,,0,0,0,,"
+        # scale pop-in 70->100% in the first 220ms + fade in/out
+        f"{{\\fad({fad_ms},350)\\t(0,220,\\fscx100\\fscy100)}}"
+        f"{{\\fscx70\\fscy70}}"
+        f"{text}"
+    )]
+
+
+def _progress_bar_events(duration: float, width: int, height: int,
+                         p: dict) -> list[str]:
+    """Thin accent progress bar pinned at the very top edge, filling 0->100%
+    across the whole clip via an animated \\clip rectangle (libass-native,
+    smooth per-frame, no stepping).
+
+    Two stacked events: a dim track (full width, always visible) + a bright
+    accent bar whose visible right edge sweeps with \\t().
+    """
+    if duration <= 0:
+        return []
+    x0 = int(width * _BAR_MARGIN)
+    x1 = int(width * (1 - _BAR_MARGIN))
+    y0 = int(height * 0.016)
+    y1 = y0 + _BAR_H
+    full_w = x1 - x0
+    accent = p.get("pop_color", "&H00FFE500")
+    dim = "&H50FFFFFF"
+    dur_ms = int(round(duration * 1000))
+    dim_event = (
+        f"Dialogue: 2,{_fmt_ts(0.0)},{_fmt_ts(duration)},Bar,,0,0,0,,"
+        f"{{\\an7\\pos({x0},{y0})\\1c{dim}\\3a&HFF&\\4a&HFF&\\p1}}"
+        f"m 0 0 l {full_w} 0 l {full_w} {_BAR_H} l 0 {_BAR_H}{{\\p0}}"
+    )
+    # Animated right edge: libass does NOT interpolate \t(\clip(...)) reliably
+    # (tested: the clip stays at its FINAL value). Drawings DO scale with
+    # \fscx, so we animate \fscx 1->100% over the clip with \an7 (top-left
+    # anchor) so the bar grows rightward — verified by pixel comparison.
+    accent_event = (
+        f"Dialogue: 3,{_fmt_ts(0.0)},{_fmt_ts(duration)},Bar,,0,0,0,,"
+        f"{{\\an7\\pos({x0},{y0})\\1c{accent}\\3a&HFF&\\4a&HFF&"
+        f"\\fscx1\\t(0,{dur_ms},\\fscx100)\\p1}}"
+        f"m 0 0 l {full_w} 0 l {full_w} {_BAR_H} l 0 {_BAR_H}{{\\p0}}"
+    )
+    return [dim_event, accent_event]
+
+
+# Emoji keyword map (Submagic-style contextual emoji). Opt-in via
+# CLIPPER_EMOJI=1 — requires an emoji-capable font on the render machine.
+_EMOJI_MAP = [
+    (re.compile(r"\b(uang|dollar|rp|milion|milyar|money|rich|kaya|salary|gaji)\b", re.I), "💰"),
+    (re.compile(r"\b(api|hot|panas|fire|viral|trending)\b", re.I), "🔥"),
+    (re.compile(r"\b(cinta|sayang|love|pacar|gebetan)\b", re.I), "❤️"),
+    (re.compile(r"\b(otak|pikir|brain|ide|idea|pintar|smart)\b", re.I), "🧠"),
+    (re.compile(r"\b(makan|food|diet|lapar|enak)\b", re.I), "🍔"),
+    (re.compile(r"\b(cepat|kilat|fast|speed|sekejap)\b", re.I), "⚡"),
+    (re.compile(r"\b(mati|bahaya|danger|seram|scary|zombie)\b", re.I), "💀"),
+    (re.compile(r"\b(ketawa|lucu|haha|funny)\b", re.I), "😂"),
+    (re.compile(r"\b(tips|cara|langkah|step|panduan)\b", re.I), "👇"),
+    (re.compile(r"\b(berat|susah|payah|hard|sulit)\b", re.I), "💪"),
+    (re.compile(r"\b(dunia|world|global|indonesia)\b", re.I), "🌍"),
+]
+
+
+def _cue_emoji(words: list[dict]) -> str:
+    for w in words:
+        for rx, em in _EMOJI_MAP:
+            if rx.search(w["word"]):
+                return em
+    return ""
+
+
+def words_to_srt(words: list[dict], style: str = "minimal") -> str:
+    """Grouped, readable SRT (v0.4): platform-portable captions that creators
+    can import into CapCut/Premiere or upload as closed captions."""
+    p = config.get_subtitle_preset(style) or {"words": 4, "min_dur": 1.0, "overflow": 7}
+    groups = _build_groups(words, 1080, 1920, {"words": 4, "min_dur": 1.0,
+                                              "overflow": 7, "size": 80})
+    def _srt_ts(t: float) -> str:
+        ms = int(round(t * 1000))
+        h, ms = divmod(ms, 3600000)
+        m, ms = divmod(ms, 60000)
+        s, ms = divmod(ms, 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    out = []
+    for i, g in enumerate(groups, 1):
+        text = " ".join((w["word"] or "").strip() for w in g if (w["word"] or "").strip())
+        if not text:
+            continue
+        out.append(f"{i}\n{_srt_ts(g[0]['start'])} --> {_srt_ts(g[-1]['end'])}\n{text}\n")
+    return "\n".join(out)
+
+
 def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single",
-                 style: str = "mrbeast") -> str:
+                 style: str = "mrbeast", hook_text: str = "",
+                 emoji: bool = False, progress_bar: bool = False,
+                 clip_duration: float = 0.0) -> str:
     """Build the full ASS document for a clip.
 
     `style` selects a config.SUBTITLE_PRESETS preset ("none" -> empty doc so
@@ -233,7 +371,11 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Word,{font},{size},{base_col},{pop_col},"
-        f"&H00000000,{back_col},-1,0,0,0,100,100,0,0,1,{outline},{shadow},2,{margin_lr},{margin_lr},{margin_v},1\n\n"
+        f"&H00000000,{back_col},-1,0,0,0,100,100,0,0,1,{outline},{shadow},2,{margin_lr},{margin_lr},{margin_v},1\n"
+        # v0.4 overlay styles: Hook (top title) + Bar (progress bar drawing)
+        f"Style: Hook,{font},{int(min(84, max(56, size * 0.60)))},{base_col},{pop_col},"
+        f"&H00000000,{back_col},-1,0,0,0,100,100,0,0,1,{max(6, outline)},{shadow},8,{margin_lr},{margin_lr},{int(height * _HOOK_SAFE_TOP)},1\n"
+        f"Style: Bar,{font},20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
@@ -241,6 +383,11 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
     groups = _build_groups(words, width, height, p)
     tag_fn = _karaoke_tags if p.get("karaoke") else _pop_tags
     out = [header]
+    # v0.4 SUPERCLIP overlay layer (burned in the SAME single encode)
+    if config.PROGRESS_BAR and progress_bar and clip_duration > 0:
+        out.extend(_progress_bar_events(clip_duration, width, height, p))
+    if config.HOOK_TEXT and hook_text:
+        out.extend(_hook_events(hook_text, clip_duration or 3.5, width, height, p, font))
     for group in groups:
         start = group[0]["start"]
         end = group[-1]["end"]
@@ -272,6 +419,10 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
         if not parts:
             continue
         text = " ".join(parts)
+        if emoji:
+            em = _cue_emoji(group)
+            if em:
+                text = f"{text} {em}"
         out.append(f"Dialogue: 0,{_fmt_ts(start)},{_fmt_ts(end)},Word,,0,0,0,,{text}")
 
     return "\n".join(out) + "\n"

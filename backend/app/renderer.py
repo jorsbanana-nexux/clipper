@@ -137,3 +137,79 @@ def convert_aspect(src: str, out_path: str, aspect: str) -> str:
         f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
     )
     return encode_video(src, out_path, vf, audio="copy")
+
+
+def loudnorm_pass(src: str, out_path: str) -> str:
+    """EBU R128 loudness normalization in ONE cheap pass (video stream is
+    COPIED, only audio re-encodes): I=-14 LUFS is the TikTok/Reels/Shorts
+    playback standard, so clips from different sources no longer jump wildly
+    in volume (v0.4). No-op (returns src) when CLIPPER_LOUDNORM=0 or the file
+    has no audio track.
+    """
+    if not getattr(config, "LOUDNORM", True):
+        return src
+    probe = subprocess.run(
+        [FFPROBE, "-v", "error", "-select_streams", "a",
+         "-show_entries", "stream=index", "-of", "csv=p=0", src],
+        capture_output=True, text=True)
+    if not probe.stdout.strip():
+        return src  # no audio -> nothing to normalize
+    subprocess.run([
+        FFMPEG, "-i", src,
+        "-map", "0:v", "-map", "0:a?",
+        "-c:v", "copy",
+        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+        "-c:a", "aac", "-b:a", "192k", "-y", out_path,
+    ], check=True, capture_output=True)
+    return out_path
+
+
+def make_titled_thumbnail(video_path: str, out_path: str, title: str = "",
+                          at_seconds: float = 1.0, width: int = 1080,
+                          height: int = 1920) -> str:
+    """Thumbnail with the clip's HOOK burned in as a bold headline (v0.4) —
+    a plain frame grab says nothing in the feed; text makes people read before
+    they watch. Falls back to the plain grab when the title is empty or drawtext
+    fails (never blocks the job).
+    """
+    make_thumbnail(video_path, out_path, at_seconds)
+    title = (title or "").strip().upper()
+    if not title:
+        return out_path
+    # naive 2-line wrap for the headline
+    words = title.split()
+    budget = 24
+    lines, cur = [], ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > budget:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+        if len(lines) == 2:
+            break
+    if cur and len(lines) < 2:
+        lines.append(cur)
+    text = "\n".join(lines)
+    font = ""
+    font_path = os.path.join(str(getattr(config, "FONT_DIR", "") or ""), "komika_axis.ttf")
+    if os.path.exists(font_path):
+        font = f"fontfile={_fpath(font_path)}:"
+    y_expr = "h*0.06"
+    cmd = [
+        FFMPEG, "-i", out_path, "-vf",
+        f"drawtext={font}text='{text.replace(chr(39), '')}':"
+        f"fontsize={int(width * 0.058)}:fontcolor=white:"
+        f"borderw=6:bordercolor=black:x=(w-text_w)/2:y={y_expr}:"
+        f"line_spacing={int(width * 0.02)}",
+        "-frames:v", "1", "-q:v", "2", "-y", out_path + ".t.jpg",
+    ]
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode == 0 and os.path.exists(out_path + ".t.jpg"):
+        os.replace(out_path + ".t.jpg", out_path)
+    else:
+        try:
+            os.remove(out_path + ".t.jpg")
+        except OSError:
+            pass
+    return out_path

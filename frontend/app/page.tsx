@@ -1,5 +1,10 @@
 "use client";
 
+// CLIPPER — v0.4 UI: SATU ALUR LURUS.
+// Tempel URL -> jadi clip. Tidak ada opsi, tidak ada pilihan gaya —
+// pipeline berjalan dengan preset flagship (MrBeast, 9:16, 8 clip).
+// Semua keputusan kreatif ada di .env backend, bukan di sini.
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Scores = { hook: number; payoff: number; emotion: number; quotability: number; energy: number };
@@ -18,6 +23,7 @@ type Clip = {
   scores: Scores;
   caption: string;
   hashtags: string[];
+  srt_url: string;
 };
 
 type JobStatus = {
@@ -28,21 +34,6 @@ type JobStatus = {
   message: string;
   clips: Clip[];
   error: string;
-};
-
-const STYLES = [
-  { id: "mrbeast", label: "MrBeast — pop biru elektrik" },
-  { id: "hormozi", label: "Hormozi — besar hijau" },
-  { id: "karaoke", label: "Karaoke — isi progresif" },
-  { id: "minimal", label: "Minimal — bersih" },
-  { id: "none", label: "Tanpa subtitle" },
-];
-
-const ASPECTS = ["9:16", "1:1", "4:5"];
-
-const inputStyle: React.CSSProperties = {
-  padding: "14px 16px", borderRadius: 10, border: "1px solid var(--line)",
-  background: "var(--panel)", color: "var(--ink)", fontSize: 15, outline: "none",
 };
 
 function fmt(s: number) {
@@ -69,12 +60,6 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [keywords, setKeywords] = useState("");
-  const [instruction, setInstruction] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false); // Topik/Instruksi tersembunyi by default
-  const [style, setStyle] = useState("mrbeast");
-  const [aspect, setAspect] = useState("9:16");
-  const [maxClips, setMaxClips] = useState(8);
   const [job, setJob] = useState<JobStatus | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -94,21 +79,19 @@ export default function Home() {
     setBusy(true);
     setJob(null);
     try {
+      // ALUR TUNGGAL: hanya URL. Gaya subtitle, aspek, jumlah clip —
+      // semua ditentukan preset backend (MrBeast · 9:16 · 8 clip).
       const r = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: url.trim(), max_clips: maxClips, mode: "podcast",
-          keywords: keywords.trim(), instruction: instruction.trim(),
-          subtitle_style: style, aspect,
-        }),
+        body: JSON.stringify({ url: url.trim(), mode: "podcast" }),
       });
       if (!r.ok) throw new Error(await r.text());
       const j: JobStatus = await r.json();
       setJob(j);
       poll(j.job_id);
     } catch (err: any) {
-      setError(err.message || "Failed to start job");
+      setError(err.message || "Gagal memulai job");
       setBusy(false);
     }
   }
@@ -118,168 +101,170 @@ export default function Home() {
     timer.current = setInterval(async () => {
       try {
         const r = await fetch(`/api/jobs/${jobId}`);
-        if (!r.ok) throw new Error(await r.text());
         const j: JobStatus = await r.json();
         setJob(j);
         if (j.status === "done" || j.status === "error") {
           stopPolling();
           setBusy(false);
+          if (j.status === "error") setError(j.error || j.message || "Job gagal");
         }
-      } catch {
-        /* transient */
+      } catch (err: any) {
+        stopPolling();
+        setBusy(false);
+        setError(err.message || "Koneksi ke backend terputus");
       }
     }, 1500);
   }
 
-  function copy(text: string, key: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(""), 1500);
+  function copy(text: string, tag: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(tag);
+      setTimeout(() => setCopied(""), 1600);
+    });
   }
 
-  const pct = job ? Math.round(job.progress * 100) : 0;
+  const running = busy && job && job.status !== "done" && job.status !== "error";
 
   return (
-    <main style={{ maxWidth: 1040, margin: "0 auto", padding: "48px 24px 96px" }}>
-      <header style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--accent)", fontFamily: "monospace" }}>AI Podcast Clipper</div>
-        <h1 style={{ fontSize: 56, lineHeight: 0.95, margin: "10px 0 8px", letterSpacing: "-0.02em" }}>
+    <main style={{ maxWidth: 920, margin: "0 auto", padding: "48px 20px 80px" }}>
+      <header style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 40, margin: 0, letterSpacing: -1, fontWeight: 800 }}>
           CLIPPER<span style={{ color: "var(--accent)" }}>.</span>
         </h1>
-        <p style={{ color: "var(--muted)", margin: 0, maxWidth: 620 }}>
-          Tempel link podcast &mdash; AI menemukan momen viral, memotong hanya bagian terbaik, membingkai ulang ke {aspect} dengan subtitle word-by-word, dan menyiapkan caption + hashtag siap posting.
+        <p style={{ color: "var(--muted)", margin: "6px 0 0", fontSize: 15 }}>
+          Tempel link video → AI menemukan momen viral → clip 9:16 siap posting.
         </p>
       </header>
 
-      <form onSubmit={submit} style={{ display: "grid", gap: 10, marginBottom: 28 }}>
+      {/* ---- SATU FORM: URL + tombol. Selesai. ---- */}
+      <form onSubmit={submit} style={{ display: "flex", gap: 10 }}>
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://youtube.com/watch?v=...  (YouTube, TikTok, Instagram)"
-          style={{ ...inputStyle, flex: "1 1 420px" }}
+          placeholder="https://youtube.com/watch?v=..."
+          autoFocus
+          style={{
+            flex: 1, padding: "16px 18px", borderRadius: 12, fontSize: 16,
+            border: "1px solid var(--line)", background: "var(--panel)",
+            color: "var(--ink)", outline: "none",
+          }}
         />
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <select value={style} onChange={(e) => setStyle(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 180 }}>
-            {STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-          <select value={aspect} onChange={(e) => setAspect(e.target.value)} style={{ ...inputStyle, width: 90 }}>
-            {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select value={maxClips} onChange={(e) => setMaxClips(Number(e.target.value))} style={{ ...inputStyle, width: 110 }}>
-            {[4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n} clips</option>)}
-          </select>
-          <button disabled={busy} type="submit"
-            style={{ padding: "14px 22px", borderRadius: 10, border: "none", background: busy ? "var(--line)" : "var(--accent)", color: "#0b0d10", fontWeight: 700, fontSize: 15, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}>
-            {busy ? "Processing..." : "Generate clips"}
-          </button>
-        </div>
-
-        {/* "Human steer": pilih topik/instruksi editor secara opsional. Disembunyikan
-            secara default (klik untuk buka) supaya tampilan utama tetap cuma
-            URL + jumlah clip seperti yang diminta -- fiturnya tetap ada bagi
-            yang mau, tidak dihapus, cuma tidak lagi memenuhi tampilan utama. */}
         <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          style={{ justifySelf: "start", background: "none", border: "none", color: "var(--muted)", fontSize: 12, cursor: "pointer", padding: "2px 0", textDecoration: "underline" }}>
-          {showAdvanced ? "▾ Sembunyikan opsi lanjutan" : "▸ Opsi lanjutan (arahkan AI ke topik tertentu)"}
+          type="submit"
+          disabled={busy || !url.trim()}
+          style={{
+            padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700,
+            background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer",
+            opacity: busy || !url.trim() ? 0.55 : 1,
+          }}
+        >
+          {busy ? "Memproses..." : "Buat Clip"}
         </button>
-        {showAdvanced && (
-          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
-            <input
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              placeholder="Topik yang kamu mau (opsional): mis. 'insight uang, cerita lucu'"
-              style={inputStyle}
-              title="Steer the AI: moments matching these topics get priority"
-            />
-            <input
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="Instruksi editor (opsional): mis. 'cari yang kontras/debat'"
-              style={inputStyle}
-            />
-          </div>
-        )}
       </form>
 
-      {error && <div style={{ padding: 12, borderRadius: 8, background: "#2a1518", border: "1px solid #5c2a2a", color: "#ff9a9a", marginBottom: 20 }}>{error}</div>}
+      {error && (
+        <p style={{ color: "#ff6b6b", background: "#2a1414", padding: "10px 14px", borderRadius: 10, fontSize: 14, marginTop: 16, whiteSpace: "pre-wrap" }}>
+          {error}
+        </p>
+      )}
 
-      {job && job.status !== "done" && job.status !== "error" && (
-        <div style={{ padding: 20, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--line)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-            <span style={{ color: "var(--muted)" }}>{job.message || "Working..."}</span>
-            <span style={{ fontFamily: "monospace", color: "var(--accent-2)" }}>{pct}%</span>
+      {/* ---- PROGRESS ---- */}
+      {running && job && (
+        <section style={{ marginTop: 32 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
+            <span>{job.message || job.stage}</span>
+            <span>{Math.round(job.progress * 100)}%</span>
           </div>
           <div style={{ height: 10, borderRadius: 6, background: "var(--line)", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, var(--accent), var(--accent-2))", transition: "width 0.5s ease" }} />
+            <div style={{ height: "100%", width: `${job.progress * 100}%`, background: "linear-gradient(90deg, var(--accent), var(--accent-2))", transition: "width .4s" }} />
           </div>
-        </div>
+        </section>
       )}
 
-      {job && job.status === "error" && (
-        <div style={{ padding: 12, borderRadius: 8, background: "#2a1518", border: "1px solid #5c2a2a", color: "#ff9a9a" }}>{job.error}</div>
-      )}
-
-      {job && job.status === "done" && (
-        <div>
+      {/* ---- LIBRARY ---- */}
+      {job && job.status === "done" && job.clips.length > 0 && (
+        <section style={{ marginTop: 36 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-            <span style={{ color: "var(--ok)", fontWeight: 700 }}>{job.clips.length} clips siap diunduh</span>
-            <a href={`/api/jobs/${job.job_id}/zip`}
-              style={{ padding: "10px 16px", borderRadius: 8, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
-              ⬇ Download semua (ZIP)
+            <h2 style={{ fontSize: 22, margin: 0 }}>
+              {job.clips.length} clip siap <span style={{ color: "var(--ok)" }}>✓</span>
+            </h2>
+            <a
+              href={`/api/jobs/${job.job_id}/zip`}
+              style={{ fontSize: 14, fontWeight: 600, color: "#fff", background: "var(--accent)", padding: "10px 18px", borderRadius: 10, textDecoration: "none" }}
+            >
+              Unduh semua (ZIP)
             </a>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+
+          <div style={{ display: "grid", gap: 20 }}>
             {job.clips.map((c) => (
-              <div key={c.index} style={{ borderRadius: 12, background: "var(--panel)", border: "1px solid var(--line)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                <video src={c.download_url} controls preload="metadata" style={{ width: "100%", aspectRatio: aspect === "1:1" ? "1/1" : aspect === "4:5" ? "4/5" : "9/16", background: "#000", display: "block" }} />
-                <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: 700, fontSize: 14 }}>#{c.index} &middot; {c.title}</span>
-                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--accent-2)" }}>★ {c.viral_score}/10</span>
+              <article key={c.index} style={{ border: "1px solid var(--line)", borderRadius: 14, background: "var(--panel)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                {/* PREVIEW VIDEO — bisa langsung diputar sebelum diunduh */}
+                <video
+                  controls
+                  preload="metadata"
+                  src={c.download_url}
+                  poster={`${c.download_url.replace(/[^/]+$/, "")}thumb.jpg`}
+                  style={{ width: "100%", maxHeight: 480, background: "#000", display: "block" }}
+                />
+                <div style={{ padding: "18px 20px" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "baseline", marginBottom: 8 }}>
+                    <span style={{ fontFamily: "monospace", color: "var(--accent)", fontWeight: 700 }}>#{c.index}</span>
+                    <h3 style={{ margin: 0, fontSize: 17, flex: 1 }}>{c.title}</h3>
+                    <span style={{ fontSize: 13, color: "var(--muted)" }}>{fmt(c.start_time)} → {fmt(c.end_time)} · {c.duration}s</span>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{fmt(c.start_time)} &ndash; {fmt(c.end_time)} &middot; {c.duration}s</div>
 
-                  {c.scores && (
-                    <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)" }}>
-                      <ScoreBar label="Hook" value={c.scores.hook} />
-                      <ScoreBar label="Payoff" value={c.scores.payoff} />
-                      <ScoreBar label="Emosi" value={c.scores.emotion} />
-                      <ScoreBar label="Quotable" value={c.scores.quotability} />
-                      <ScoreBar label="Energi" value={c.scores.energy} />
-                    </div>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <span style={{ fontWeight: 800, fontSize: 20, color: scoreColor(c.viral_score) }}>{c.viral_score}</span>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>/10 viral</span>
+                  </div>
 
-                  {c.reason && <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>&ldquo;{c.reason}&rdquo;</div>}
+                  <div style={{ marginBottom: 12 }}>
+                    <ScoreBar label="Hook" value={c.scores.hook} />
+                    <ScoreBar label="Payoff" value={c.scores.payoff} />
+                    <ScoreBar label="Emosi" value={c.scores.emotion} />
+                    <ScoreBar label="Quotable" value={c.scores.quotability} />
+                    <ScoreBar label="Energi" value={c.scores.energy} />
+                  </div>
+
+                  <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>{c.reason}</p>
 
                   {c.caption && (
-                    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                      <div style={{ flex: 1, fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}>
-                        {c.caption}
-                        {c.hashtags?.length > 0 && (
-                          <div style={{ marginTop: 4, color: "var(--accent-2)" }}>
-                            {c.hashtags.map((h) => `#${h}`).join(" ")}
-                          </div>
-                        )}
+                    <div style={{ border: "1px dashed var(--line)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+                      <p style={{ margin: "0 0 8px", fontSize: 14 }}>{c.caption}</p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {c.hashtags.map((h) => (
+                          <span key={h} style={{ fontSize: 12, color: "var(--accent-2)", background: "var(--bg)", padding: "2px 8px", borderRadius: 999 }}>#{h}</span>
+                        ))}
                       </div>
                       <button
-                        onClick={() => copy(`${c.caption}\n\n${(c.hashtags || []).map((h) => `#${h}`).join(" ")}`, `cap-${c.index}`)}
-                        style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
-                        {copied === `cap-${c.index}` ? "✓ Copied" : "Copy caption"}
+                        onClick={() => copy(`${c.caption}\n\n${c.hashtags.map((h) => `#${h}`).join(" ")}`, `cap-${c.index}`)}
+                        style={{ marginTop: 10, fontSize: 12, background: "transparent", border: "1px solid var(--line)", color: "var(--ink)", padding: "6px 12px", borderRadius: 8, cursor: "pointer" }}
+                      >
+                        {copied === `cap-${c.index}` ? "Tersalin ✓" : "Salin caption + hashtag"}
                       </button>
                     </div>
                   )}
 
-                  <a href={c.download_url} download={c.filename}
-                    style={{ marginTop: "auto", display: "block", textAlign: "center", padding: "10px", borderRadius: 8, background: "var(--accent)", color: "#0b0d10", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
-                    Download
-                  </a>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <a href={c.download_url} download={c.filename} style={{ fontSize: 14, fontWeight: 600, color: "#fff", background: "var(--accent)", padding: "10px 18px", borderRadius: 10, textDecoration: "none" }}>
+                      Unduh MP4
+                    </a>
+                    {c.srt_url && (
+                      <a href={c.srt_url} download={`${c.filename.replace(".mp4", "")}.srt`} style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", border: "1px solid var(--line)", padding: "10px 18px", borderRadius: 10, textDecoration: "none" }}>
+                        Unduh SRT
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
+      )}
+
+      {job && job.status === "done" && job.clips.length === 0 && (
+        <p style={{ marginTop: 32, color: "var(--muted)" }}>Tidak ada momen yang lolos quality gate. Coba video lain.</p>
       )}
     </main>
   );

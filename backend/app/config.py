@@ -279,6 +279,23 @@ def get_subtitle_preset(name: str) -> dict:
     return p
 
 
+# ======================== v0.4 — SUPERCLIP VISUALS ========================
+# Hook title overlay: a big bold HOOK line pinned at the top for the first
+# ~3.5s of each clip (the "first-2-seconds" retention trick every top creator
+# uses — Submagic/Opus charge for this; here it is free & offline).
+HOOK_TEXT: bool = os.environ.get("CLIPPER_HOOK_TEXT", "1") in ("1", "true", "yes", "on")
+# Progress bar: a thin animated accent bar at the very top edge that fills
+# across the whole clip (retention cue — viewers feel the payoff is close).
+PROGRESS_BAR: bool = os.environ.get("CLIPPER_PROGRESS_BAR", "1") in ("1", "true", "yes", "on")
+# Emoji captions (Submagic-style). OFF by default: burning emoji requires an
+# emoji-capable font on the rendering machine (e.g. Noto Color Emoji installed
+# system-wide); without one, libass renders empty boxes. Turn on once you know.
+EMOJI_CAPTIONS: bool = os.environ.get("CLIPPER_EMOJI", "0") in ("1", "true", "yes", "on")
+# EBU R128 loudness normalization on the final encode (I=-14 LUFS is the
+# TikTok/YouTube/Instagram playback standard) — clips no longer vary wildly
+# in volume between sources.
+LOUDNORM: bool = os.environ.get("CLIPPER_LOUDNORM", "1") in ("1", "true", "yes", "on")
+
 # Export aspect ratios (v0.3). The render pipeline is native 9:16; 1:1 / 4:5
 # are converted in ONE cheap final pass (scale + blurred pad, face safe).
 ASPECTS: dict = {

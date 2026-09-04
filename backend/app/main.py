@@ -19,7 +19,7 @@ from .models import ClipRequest, JobStatus
 app = FastAPI(
     title="Clipper API",
     description="AI podcast clipping: paste a URL, get viral 9:16 clips with word-by-word captions.",
-    version="0.1.0",
+    version="0.4.0",
 )
 
 app.add_middleware(
@@ -44,6 +44,8 @@ def health():
         analysis_label = "openai"
     return {
         "status": "ok",
+        "version": app.version,
+        "analysis_mode": _analysis_mode(),
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "whisper_backend": config.WHISPER_BACKEND,
         "analysis_backend": analysis_label,
@@ -56,42 +58,28 @@ def health():
     }
 
 
-def _analysis_key_ready() -> bool:
-    if config.ANALYSIS_BACKEND == "gemini":
-        return bool(config.GEMINI_API_KEY)
-    return bool(config.OPENAI_API_KEY)
+def _analysis_mode() -> str:
+    """Which analysis tier this job run will actually use (v0.4).
+
+    'gemini'/'openai' = LLM with a configured key; 'local' = the offline
+    heuristic analyzer (no key, no cost, no network)."""
+    backend = (config.ANALYSIS_BACKEND or "").strip().lower()
+    if backend == "local":
+        return "local"
+    if backend == "gemini" and config.GEMINI_API_KEY:
+        return "gemini"
+    if backend == "openai" and config.OPENAI_API_KEY:
+        return "openai"
+    return "local"
 
 
 @app.post("/jobs", response_model=JobStatus)
 async def create_job(request: ClipRequest):
-    """FIX(bug): must be `async def` so FastAPI runs it on the main event loop.
-    A sync endpoint runs in a threadpool thread with NO running asyncio loop,
-    so manager.start() -> asyncio.create_task() raised
-    `RuntimeError: no running event loop` (always -> 500 on every /jobs call)."""
-    if not _analysis_key_ready():
-        if config.ANALYSIS_BACKEND == "gemini":
-            detail = (
-                "GEMINI_API_KEY belum diset. Isi GEMINI_API_KEY=... di file .env "
-                "(ambil gratis di https://aistudio.google.com/apikey) lalu restart "
-                "backend (cek GET /health).")
-        else:
-            detail = (
-                "OPENAI_API_KEY belum diset. Isi OPENAI_API_KEY=sk-... di file .env "
-                "(lihat README: 'Menjalankan Secara Lokal') lalu restart backend "
-                "(cek GET /health).")
-        raise HTTPException(status_code=500, detail=detail)
+    """v0.4: creating a job NEVER 500s over a missing API key anymore —
+    the offline heuristic analyzer guarantees the pipeline can always run
+    (see analyzer.find_viral_moments)."""
     job = manager.create()
-    # manager.start is sync but calls asyncio.create_task(); running it from an
-    # async endpoint puts it on the event loop thread, where the loop exists.
     manager.start(job, request)
-    return job.status
-
-
-@app.get("/jobs/{job_id}", response_model=JobStatus)
-def get_job(job_id: str):
-    job = manager.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
     return job.status
 
 
@@ -129,6 +117,10 @@ def zip_job(job_id: str):
                     break
             if abs_path.exists():
                 zf.write(abs_path, arcname=c.filename)
+                # v0.4: portable SRT rides along in the ZIP
+                srt = config.OUTPUT_DIR / job_id / f"clip_{c.index}" / "subs.srt"
+                if srt.exists():
+                    zf.write(srt, arcname=c.filename.replace(".mp4", ".srt"))
                 meta.append({
                     "file": c.filename,
                     "index": c.index,

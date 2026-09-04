@@ -341,7 +341,9 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         if local_words:
             ass_doc = subtitles.words_to_ass(
                 local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode,
-                style=subtitle_style)
+                style=subtitle_style, hook_text=hl.hook,
+                emoji=getattr(config, "EMOJI_CAPTIONS", False),
+                progress_bar=True, clip_duration=loc_dur)
             if ass_doc:
                 Path(ass_path).write_text(ass_doc, encoding="utf-8")
                 await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
@@ -357,7 +359,9 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
             report(0.55, "Membakar subtitle word-by-word")
             ass_doc = subtitles.words_to_ass(
                 local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode,
-                style=subtitle_style)
+                style=subtitle_style, hook_text=hl.hook,
+                emoji=getattr(config, "EMOJI_CAPTIONS", False),
+                progress_bar=True, clip_duration=loc_dur)
             if ass_doc:
                 Path(ass_path).write_text(ass_doc, encoding="utf-8")
             else:
@@ -376,12 +380,31 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         await asyncio.to_thread(renderer.convert_aspect, final, converted, aspect)
         final = converted
 
+    if getattr(config, "LOUDNORM", True):
+        report(0.82, "Normalisasi loudness (standar TikTok/Shorts)")
+        norm = str(seg_dir / "final_norm.mp4")
+        normed = await asyncio.to_thread(renderer.loudnorm_pass, final, norm)
+        if normed != final:
+            final = normed
+
     report(0.85, "Memverifikasi output")
     await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
 
     thumb = str(seg_dir / "thumb.jpg")
     report(0.95, "Membuat thumbnail")
-    await asyncio.to_thread(renderer.make_thumbnail, final, thumb)
+    await asyncio.to_thread(renderer.make_titled_thumbnail, final, thumb, hl.hook)
+
+    # v0.4: portable SRT next to every clip (CapCut/Premiere/CC importable)
+    srt_rel = ""
+    if local_words and subtitle_style != "none":
+        try:
+            srt_doc = subtitles.words_to_srt(local_words, style="minimal")
+            if srt_doc.strip():
+                srt_path = seg_dir / "subs.srt"
+                srt_path.write_text(srt_doc, encoding="utf-8")
+                srt_rel = f"/clips/{job.job_id}/clip_{index}/subs.srt"
+        except Exception:
+            srt_rel = ""
 
     final_name = Path(final).name
     rel = f"/clips/{job.job_id}/clip_{index}/{final_name}"
@@ -399,6 +422,7 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         scores=hl.scores,
         caption=hl.caption,
         hashtags=hl.hashtags,
+        srt_url=srt_rel,
     )
 
 

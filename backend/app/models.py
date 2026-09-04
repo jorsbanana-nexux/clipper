@@ -70,6 +70,7 @@ class ClipInfo(BaseModel):
     scores: ClipScores = Field(default_factory=ClipScores)
     caption: str = ""
     hashtags: list[str] = Field(default_factory=list)
+    srt_url: str = ""  # v0.4: portable captions (CapCut/Premiere importable)
 
 
 class JobStatus(BaseModel):

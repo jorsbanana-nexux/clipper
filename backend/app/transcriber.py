@@ -12,8 +12,6 @@ import tempfile
 import threading
 from pathlib import Path
 
-from openai import OpenAI
-
 from . import config
 
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
@@ -38,7 +36,7 @@ def _probe_duration(audio_path: str) -> float:
         return 0.0
 
 
-def _transcribe_single(audio_path: str, client: OpenAI, language: str | None) -> dict:
+def _transcribe_single(audio_path: str, client, language: str | None) -> dict:
     """Transcribe one file. Returns the data as-is (may be empty for a
     near-silent trailing chunk). Callers decide whether empty is fatal."""
     with open(audio_path, "rb") as fh:
@@ -161,6 +159,10 @@ def transcribe(audio_path: str, language: str | None = None) -> dict:
     if not config.OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not set. Provide it via environment.")
 
+    # BUGFIX v0.4: `openai` used to be imported at module level, so a free-mode
+    # install (requirements-free.txt only, no openai) crashed the WHOLE backend
+    # at import time. It is imported lazily here — needed only on the API path.
+    from openai import OpenAI
     client = OpenAI(api_key=config.OPENAI_API_KEY)
     size = os.path.getsize(audio_path)
 
