@@ -5,6 +5,16 @@
 
 **Terakhir diperbarui:** 2026-09-04 (v0.3.0 — human steer, skor 5 dimensi, metadata posting bahasa konten, preset subtitle, multi-aspek, ZIP, smoke test offline)
 
+## 0a-ter3. Changelog v0.3.3 (2026-09-04 — duo face-aware + anti-smear)
+
+1. reframe_duo REWRITE: tracking 2 identitas wajah (stabil kiri/kanan,
+   nearest-identity, carry-forward), tiap band crop-follow sendiri, EMA
+   smoothing — bukan lagi belah statis 50/50 tanpa otak.
+2. BUGFIX subtitle: clamp anti-smear — tak pernah 2 kata solid biru
+   bersamaan saat timestamp Whisper overlap.
+3. tests/smoke_duo_facetrack.py: 7 test PASS (logika + bukti render warna
+   mengikuti track + handoff warna presisi).
+
 ## 0a-ter2. Changelog v0.3.2 (2026-09-04 — replikasi video referensi MrBeast + 2 bugfix subtitle)
 
 1. **mrbeast preset v2** (analisis frame-by-frame video referensi): aktif

@@ -138,6 +138,30 @@ Munch "no support from a person"):
 6. Verifikasi objektif OpenCV: 2 baris maks, 6,7% tinggi frame, biru hanya pada
    kata aktif. Smoke render + dynamic: PASS.
 
+## 2e. Changelog v0.3.3 — SPLIT DUO SADAR-WAJAH + ANTI-SMEAR SUBTITLE (2026-09-04)
+
+> Dipicu screenshot hasil uji user (commit lama): tanaman/dekor ditampilkan
+> seperti "pembicara" di band duo, subtitle biru "menyeret" ke kanan.
+
+1. **AKAR MASALAH DITEMUKAN**: reframe_duo LAMA sama sekali TIDAK memakai
+   face detection — cuma membelah frame kiri/kanan 50/50 secara geometris
+   statis. Dekor di satu sisi frame (tanaman, rak) dirender persis seperti
+   pembicara; orang yang tidak di tengah bagiannya terpotong buruk.
+2. **REWRITE reframe_duo (otak editor)**: wajah dideteksi berjalannya waktu,
+   dua identitas DILACAK stabil (kiri->kanan, nempel ke identitas terdekat
+   saat cuma 1 wajah terlihat, carry-forward saat 0 wajah — tak snap ke
+   tengah), tiap band crop-follow identitasnya SENDIRI dengan EMA smoothing
+   + clamp gerak yang sama seperti solo. Fallback statis hanya kalau deteksi
+   benar-benar kosong.
+3. **BUGFIX anti-smear subtitle**: timestamp kata Whisper bisa overlap ~10ms
+   di ucapan cepat -> jendela pudar-ke-putih kata 1 masih jalan saat kata 2
+   mulai pop biru -> DUA kata solid biru bersamaan = tampak seperti warna
+   biru terseret ke kanan. Kini fade-back di-clamp mulai TEPAT saat kata
+   berikutnya mulai (handoff crossfade 40ms bersih).
+4. Smoke test baru tests/smoke_duo_facetrack.py (7 test: logika tracking
+   identitas + bukti render crop mengikuti track + anti-smear) — PASS.
+   Semua smoke test lama tetap PASS (tanpa regresi).
+
 ## 3. KEKURANGAN / GAP yang diketahui (penting dibaca agent)
 
 > Ini daftar jujur hal-hal yang **belum beres**. Jangan dianggap sudah jalan.

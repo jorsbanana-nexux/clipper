@@ -144,6 +144,15 @@ def _pop_tags(w: dict, line_start: float, p: dict, next_start: float | None = No
     dip = int(round(min(1.0, max(0.5, float(p.get("dip", 0.95)))) * 100))
     ms0 = max(0, int(round((w["start"] - line_start) * 1000)))
     ms1 = max(ms0 + 40, int(round((w["end"] - line_start) * 1000)))
+    # BUGFIX v0.3.3 ("warna biru menyeret/smear ke kanan"): Whisper word
+    # timestamps can be tight or slightly overlapping on fast speech, so this
+    # word's colour-fade-back-to-white window could still be running when the
+    # NEXT word's own pop-to-blue window starts -> two words read as tinted
+    # at once, which looks exactly like a colour smear dragging rightward.
+    # Clamp: this word must be back to white before the next one starts.
+    if next_start is not None:
+        next_ms0 = int(round((next_start - line_start) * 1000))
+        ms1 = min(ms1, max(ms0 + 40, next_ms0))
     span = ms1 - ms0
     t40 = ms0 + int(span * 0.4)
     t75 = ms0 + int(span * 0.75)

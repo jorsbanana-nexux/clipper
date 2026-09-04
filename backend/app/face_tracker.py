@@ -274,13 +274,210 @@ def _probe_dims(video_path: str) -> tuple[int, int]:
         return 1920, 1080
 
 
-def reframe_duo(video_path: str, output_path: str, ass_path: str | None = None) -> str:
-    """Two-speaker split-screen -> stacked top & bottom bands (9:16).
+def _build_duo_tracks(frames: list[FrameFaces]) -> tuple[list[float], list[float], list[float]]:
+    """Turn raw per-frame face detections into TWO STABLE identity tracks.
 
-    Splits the source into LEFT and RIGHT halves (for two speakers sitting
-    side-by-side), scales each half to a 1080x960 band, then stacks them
-    vertically. When `ass_path` is given, subtitle + effects are folded into the
-    SAME encode pass (faster batch). Audio is copied (timing unchanged).
+    v0.3.3 — this is the "brain" that was MISSING before: the old reframe_duo
+    never looked at face positions at all, it just cut the frame in half by
+    GEOMETRY (left half / right half), so decor sitting in one half (a plant
+    wall, a shelf) got treated exactly like a speaker. Real footage doesn't
+    obey a 50/50 split — one person can dominate more of the frame, sit off-
+    centre, or the camera can be uneven. This tracks the ACTUAL two faces:
+
+    - Frame with >=2 faces: the two LARGEST are sorted left->right by centre-x
+      and assigned to the "left" / "right" identity (stable seating order —
+      podcast guests essentially never swap physical sides mid-take).
+    - Frame with exactly 1 face: assigned to whichever identity it is
+      POSITIONALLY closest to (keeps identity from flip-flopping when the
+      camera briefly only catches one person, e.g. a reaction close-up).
+    - Frame with 0 faces (cut/occlusion): both identities CARRY FORWARD their
+      last known position rather than snapping to frame-centre (0.5), so the
+      crop doesn't jump on a missed detection.
+
+    Returns (ts, cx_left, cx_right) — raw (pre-smoothing) per-timestamp centre-x
+    (0..1) for each identity, aligned to `ts`.
+    """
+    if not frames:
+        return [], [], []
+    ts = [f.t for f in frames]
+    left_track: list[float] = []
+    right_track: list[float] = []
+    last_left: float | None = None
+    last_right: float | None = None
+    for f in frames:
+        faces = sorted(f.faces, key=lambda x: -x.size)[:2]
+        if len(faces) >= 2:
+            cxs = sorted(x.cx for x in faces)
+            l, r = cxs[0], cxs[1]
+        elif len(faces) == 1:
+            c = faces[0].cx
+            if last_left is None and last_right is None:
+                l, r = c, c
+            elif last_left is None:
+                l, r = c, last_right
+            elif last_right is None:
+                l, r = last_left, c
+            elif abs(c - last_left) <= abs(c - last_right):
+                l, r = c, last_right
+            else:
+                l, r = last_left, c
+        else:
+            l = last_left if last_left is not None else 0.28
+            r = last_right if last_right is not None else 0.72
+        left_track.append(l)
+        right_track.append(r)
+        last_left, last_right = l, r
+    return ts, left_track, right_track
+
+
+def _fit_crop_box(W: int, H: int, out_w: int, out_h: int, cx_norm: float) -> tuple[int, int, int, int]:
+    """Largest out_w:out_h box that fits inside a WxH source, horizontally
+    centred on cx_norm (0..1), never distorting aspect ratio."""
+    target_ar = out_w / out_h
+    src_ar = W / H
+    if src_ar >= target_ar:
+        # source is relatively wider -> crop width, keep full height
+        crop_h = H
+        crop_w = max(2, int(round(H * target_ar)))
+        crop_w = min(crop_w, W)
+        max_x = max(0, W - crop_w)
+        x = int(np.clip(cx_norm * W - crop_w / 2, 0, max_x))
+        return x, 0, crop_w, crop_h
+    # source is relatively taller -> crop height, keep full width, slight
+    # upward bias so heads aren't cut off by a pure centre-crop
+    crop_w = W
+    crop_h = max(2, int(round(W / target_ar)))
+    crop_h = min(crop_h, H)
+    max_y = max(0, H - crop_h)
+    y = int(np.clip(max_y * 0.35, 0, max_y))
+    return 0, y, crop_w, crop_h
+
+
+def _reframe_duo_facetrack(video_path: str, output_path: str, ts: list[float],
+                           cx_top: list[float], cx_bot: list[float],
+                           ass_path: str | None = None) -> str | None:
+    """Real split-screen: each band crop-follows ITS OWN tracked identity.
+
+    Decodes once, composites two independently-tracked crops (top identity /
+    bottom identity) into the 1080x1920 canvas per frame, encodes once. Same
+    decode/cv2/encode-pipe pattern as the solo crop-follow, so it inherits the
+    same reliability (no cv2.VideoCapture/VideoWriter) and the same smooth,
+    clamped-movement camera language — just doubled, one crop per band.
+    Returns None (caller falls back) if the source is unusable.
+    """
+    W, H = _probe_dims(video_path)
+    if W <= 0 or H <= 0:
+        return None
+    TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
+    band_h = TH // 2
+
+    tx0, ty0, tw0, th0 = _fit_crop_box(W, H, TW, band_h, cx_top[0] if cx_top else 0.3)
+    bx0, by0, bw0, bh0 = _fit_crop_box(W, H, TW, band_h, cx_bot[0] if cx_bot else 0.7)
+    if tw0 < 8 or th0 < 8 or bw0 < 8 or bh0 < 8:
+        return None
+
+    fps = _probe_fps(video_path)
+    frame_bytes = W * H * 3
+    vpath = output_path + ".v.mp4"
+
+    dec = subprocess.Popen(
+        [FFMPEG, "-i", video_path, "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    enc = subprocess.Popen(
+        [FFMPEG, "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
+         "-s", f"{TW}x{TH}", "-r", str(fps), "-i", "-",
+         "-vf", renderer.effects_vf(ass_path),
+         "-threads", "0", "-c:v", "libx264", "-preset", config.FFMPEG_PRESET,
+         "-crf", str(config.FFMPEG_CRF), "-pix_fmt", "yuv420p", vpath],
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    idx = 0
+    prev_x_top, prev_x_bot = None, None
+    max_move_top = max(2.0, tw0 * 0.18)
+    max_move_bot = max(2.0, bw0 * 0.18)
+    try:
+        while True:
+            raw = dec.stdout.read(frame_bytes)
+            if not raw or len(raw) < frame_bytes:
+                break
+            frame = np.frombuffer(raw, np.uint8).reshape((H, W, 3))
+            t = idx / fps
+
+            ct = _xcx_at(t, ts, cx_top) if ts else 0.3
+            cb = _xcx_at(t, ts, cx_bot) if ts else 0.7
+
+            xt, yt, wt, ht = _fit_crop_box(W, H, TW, band_h, ct)
+            xt -= xt % 2
+            if prev_x_top is not None:
+                xt = int(np.clip(xt, prev_x_top - max_move_top, prev_x_top + max_move_top))
+                xt -= xt % 2
+            prev_x_top = xt
+
+            xb, yb, wb, hb = _fit_crop_box(W, H, TW, band_h, cb)
+            xb -= xb % 2
+            if prev_x_bot is not None:
+                xb = int(np.clip(xb, prev_x_bot - max_move_bot, prev_x_bot + max_move_bot))
+                xb -= xb % 2
+            prev_x_bot = xb
+
+            top_region = frame[yt:yt + ht, xt:xt + wt]
+            bot_region = frame[yb:yb + hb, xb:xb + wb]
+            top_band = cv2.resize(top_region, (TW, band_h), interpolation=cv2.INTER_AREA)
+            bot_band = cv2.resize(bot_region, (TW, band_h), interpolation=cv2.INTER_AREA)
+            canvas = np.vstack([top_band, bot_band])
+            enc.stdin.write(canvas.tobytes())
+            idx += 1
+    finally:
+        dec.stdout.close()
+        dec.wait()
+        if enc.stdin is not None:
+            enc.stdin.close()
+        enc.wait()
+    _mux_audio(video_path, vpath, output_path)
+    try:
+        os.remove(vpath)
+    except OSError:
+        pass
+    return output_path
+
+
+def reframe_duo(video_path: str, output_path: str, ass_path: str | None = None) -> str:
+    """Two-speaker split-screen -> stacked top & bottom bands (9:16), each band
+    crop-following ITS OWN tracked speaker (v0.3.3 — see _build_duo_tracks).
+
+    v0.3.3 BUGFIX (the "kaku"/robotic split complaint): the old version split
+    the frame into a static LEFT half / RIGHT half by pure geometry, with NO
+    face detection at all. Decor sitting in one half of the shot (a plant
+    wall, a shelf) was rendered exactly like a speaker, and a person who
+    wasn't centred in their half got cropped badly. Now: faces are detected
+    over time, each identity is tracked with the SAME EMA smoothing used for
+    the smooth solo crop-follow, and each band's crop glides to follow its own
+    speaker. Falls back to the old static split ONLY if face detection finds
+    nothing at all (detector unavailable) — never crashes the render.
+    """
+    frames = analyze_faces_all(video_path, sample_interval=0.4)
+    ts, cx_l_raw, cx_r_raw = _build_duo_tracks(frames)
+    if ts and len(ts) >= 2:
+        cx_top = _ema_smooth(cx_l_raw, config.FACE_SMOOTH_ALPHA)
+        cx_bot = _ema_smooth(cx_r_raw, config.FACE_SMOOTH_ALPHA)
+        try:
+            result = _reframe_duo_facetrack(video_path, output_path, ts, cx_top, cx_bot, ass_path)
+            if result:
+                return result
+        except Exception:
+            pass  # any decode/encode hiccup -> fall through to the static split
+    return _reframe_duo_static_fallback(video_path, output_path, ass_path)
+
+
+def _reframe_duo_static_fallback(video_path: str, output_path: str, ass_path: str | None = None) -> str:
+    """LAST-RESORT duo split when face detection finds nothing at all (e.g.
+    MediaPipe/Haar both unavailable in this environment). Static 50/50 left/
+    right halves stacked top/bottom — geometry-only, no face awareness. This
+    used to be the ONLY behaviour (v0.3.2 and earlier); now it is only the
+    fallback for a genuinely faceless duo segment, which should be rare since
+    jobs._validate_duo_with_faces already downgrades duo->single upstream
+    when two faces aren't consistently visible.
     """
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
     band_h = TH // 2
