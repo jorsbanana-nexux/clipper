@@ -5,9 +5,16 @@ line so ffmpeg encodes with the bundled font instead of silently falling back
 to a system default (which can render incorrectly or look different).
 """
 import os
+import re
 from pathlib import Path
 
 from . import config
+
+# Sentence punctuation stripped from words so captions look clean and efficient
+# (per spec: remove all commas/periods). Internal apostrophes are kept so
+# contractions like "don't" stay readable.
+_PUNCT = re.compile(r"[.,!?;:…—–\u2026]+")
+_WORD_CHARS = r"\w'’"
 
 
 def _fmt_ts(seconds: float) -> str:
@@ -32,20 +39,12 @@ def _resolve_font(font_name: str) -> str:
     return font_name
 
 
-import re
-
-# Sentence punctuation we strip from words so captions look clean and efficient
-# (per spec: remove all commas/periods). Apostrophes are kept so contractions
-# like "don't" stay readable.
-_PUNCT = re.compile(r"[.,!?;:…—–\u2026]+")
-_EDGE_PUNCT = re.compile(r"[^\w'’\\u2019][\w'’\\u2019]*$")
-
-
 def _clean_word(word: str) -> str:
-    """Remove sentence punctuation from a word (keep internal apostrophes)."""
+    """Remove sentence punctuation from a word (keep internal apostrophes).
+    Strips ALL leading/trailing non-word chars, not just one."""
     w = _PUNCT.sub("", word)
-    w = re.sub(r"^[^\w'’]", "", w)      # strip leading non-word chars
-    w = re.sub(r"[^\w'’]$", "", w)      # strip trailing non-word chars
+    w = re.sub(rf"^[{_WORD_CHARS}]*[^\w'’]+", "", w)
+    w = re.sub(rf"[^\w'’]+[{_WORD_CHARS}]*$", "", w)
     return w
 
 
