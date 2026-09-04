@@ -232,17 +232,6 @@ def face_counts_over_time(video_path: str, sample_interval: float = 0.5) -> list
     return [(f.t, len(f.faces)) for f in frames]
 
 
-def window_has_two_faces(video_path: str, start: float, end: float,
-                         ratio: float = 0.4, sample_interval: float = 0.5) -> bool:
-    """True when two faces are visible in >= `ratio` of samples inside [start,end]."""
-    counts = face_counts_over_time(video_path, sample_interval)
-    if not counts:
-        return False
-    in_win = [n for (t, n) in counts if start <= t <= end]
-    if not in_win:
-        return False
-    return sum(1 for n in in_win if n >= 2) / len(in_win) >= ratio
-
 
 def _xcx_at(t, ts: list[float], cxs: list[float]) -> float:
     """Interpolate a centre-x series at time t."""

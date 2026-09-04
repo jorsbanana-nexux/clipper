@@ -1,0 +1,19 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+fontsdir: /app/conversations/6a9a94b25483a3e04fcb5d70/repo/fonts
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Word,Komika Axis,100,&H00FFFFFF,&H0000FFFF,&H00000000,&H70141014,-1,0,0,0,100,100,0,0,1,8,3,2,32,32,652,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+
+Dialogue: 0,0:00:00.50,0:00:01.45,Word,,0,0,0,,{\t(0,180,\fscx120\fscy120)\t(180,337,\fscx95\fscy95)\t(337,450,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(450,490,\c&H00FFFFFF)}INI {\t(500,680,\fscx120\fscy120)\t(680,837,\fscx95\fscy95)\t(837,950,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(950,990,\c&H00FFFFFF)}BUKAN
+Dialogue: 0,0:00:01.50,0:00:02.45,Word,,0,0,0,,{\t(0,180,\fscx120\fscy120)\t(180,337,\fscx95\fscy95)\t(337,450,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(450,490,\c&H00FFFFFF)}SEKADAR {\t(500,680,\fscx120\fscy120)\t(680,837,\fscx95\fscy95)\t(837,950,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(950,990,\c&H00FFFFFF)}KLAIM
+Dialogue: 0,0:00:02.50,0:00:03.45,Word,,0,0,0,,{\t(0,180,\fscx120\fscy120)\t(180,337,\fscx95\fscy95)\t(337,450,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(450,490,\c&H00FFFFFF)}LIHAT {\t(500,680,\fscx120\fscy120)\t(680,837,\fscx95\fscy95)\t(837,950,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(950,990,\c&H00FFFFFF)}SENDIRI
+Dialogue: 0,0:00:03.50,0:00:04.45,Word,,0,0,0,,{\t(0,180,\fscx120\fscy120)\t(180,337,\fscx95\fscy95)\t(337,450,\fscx100\fscy100)\t(0,40,\c&H0000FFFF)\t(450,490,\c&H00FFFFFF)}HASILNYA {\t(500,680,\fscx120\fscy120)\t(680,837,\fscx95\fscy95)\t(837,950,\fscx100\fscy100)\t(500,540,\c&H0000FFFF)\t(950,990,\c&H00FFFFFF)}SEKARANG

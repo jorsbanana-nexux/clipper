@@ -84,6 +84,37 @@ Munch "no support from a person"):
 9. **Timing karaoke** — durasi fill \k memakai start kata BERIKUTNYA (kata tetap
    menyala melewati jeda alami, tidak padam di tengah kalimat).
 
+## 2c. Changelog v0.3.1 — AUDIT FASE A & B + FIX BUG DUO KRITIS (2026-09-04)
+
+> Audit menyeluruh: setiap fungsi diperiksa apakah benar-benar dipanggil
+> (deteksi dead code), semua jalur (caption/non-caption, HF on/off) dilacak,
+> lalu 2 BUG NYATA ditemukan dan diperbaiki + 7 unit test logika dibuat.
+
+1. **BUGFIX KRITIS — duo tidak pernah aktif pada percakapan bergantian**
+   (`layout.py`): `solo_run` tidak di-reset saat GILIRAN PEMBICARA berganti.
+   Diarization nyata = bergantian (A bicara → berhenti → B bicara), tidak
+   tumpang tindih → `n>=2` tidak pernah terjadi → layout mentok di SINGLE
+   selamanya WALAUPUN HuggingFace bekerja sempurna. Fix: reset saat pembicara
+   aktif berganti; hanya MONOLOG panjang (≥min_solo) yang menutup duo.
+   Ini penyebab sebenarnya keluhan "split gagal aktif meski token diisi".
+2. **BUGFIX — snap-cut gagal saat konklusi tepat di batas min_dur**
+   (`jobs.py`): `s_end <= floor` memutus pencarian sebelum cek tanda baca.
+   Potongan TEPAT di min_dur itu legal (≥ min_dur). Fix: `< floor - 0.001`.
+3. **Dead code dihapus**: `face_tracker.window_has_two_faces` (tidak pernah
+   dipanggil di mana pun). Audit fungsi lain: fallback downloader
+   (`download_full_and_cut` dll) HIDUP (dipanggil di jalur except), CUT_MODE
+   HIDUP (via `_ffmpeg_cut`), semua route FastAPI hidup.
+4. **Semantik duo sesuai spesifikasi owner** (`config.py` + `.env.example`):
+   HF ON → duo split otomatis + lead 2,5s anti-telat; HF OFF → SOLO mulus
+   (`CLIPPER_DUO_AUTO_FACES` default 0 — auto-duo kini opt-in eksplisit).
+5. **Analisis AI ditingkatkan**: `GEMINI_FALLBACK_MODELS` (rantai fallback
+   model gratis: 3.8-flash → 3.7-flash → 2.5-pro; analisis tidak pernah mati
+   karena satu model 404/sibuk) + `CLIPPER_MIN_VIRAL_SCORE` quality gate
+   (clip basah dibuang, tidak pernah mengosongkan hasil).
+6. **Unit test logika**: lead anti-telat, solo murni, buka/tutup duo, snap-cut
+   (2 kasus), gate kualitas, validasi duo vs wajah — 7/7 PASS. Smoke test
+   render end-to-end offline: PASS.
+
 ## 3. KEKURANGAN / GAP yang diketahui (penting dibaca agent)
 
 > Ini daftar jujur hal-hal yang **belum beres**. Jangan dianggap sudah jalan.

@@ -44,6 +44,19 @@ GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 # Auto-retry count on transient Gemini errors (503 high demand / 429 quota).
 GEMINI_RETRIES: int = int(os.environ.get("GEMINI_RETRIES", "4"))
+# v0.3.1: model fallback chain — jika model utama 404/sibuk (503/429), otomatis
+# coba model berikutnya (semua gratis di AI Studio). Urutan penting: flash dulu
+# (cepat), pro terakhir ( reasoning paling dalam, rate limit lebih ketat).
+GEMINI_FALLBACK_MODELS: list[str] = [
+    m.strip() for m in os.environ.get(
+        "GEMINI_FALLBACK_MODELS",
+        "gemini-3.7-flash,gemini-2.5-pro",
+    ).split(",") if m.strip()
+]
+# v0.3.1: quality gate — clip dengan skor di bawah ini DIBUANG (asal/basah tidak
+# lolos). Tidak pernah membuang semuanya: kalau semua lemah, yang terbaik tetap
+# dikembalikan. "5 excellent beats 8 mediocre" — jawaban untuk keluhan utama.
+MIN_VIRAL_SCORE: int = int(os.environ.get("CLIPPER_MIN_VIRAL_SCORE", "4"))
 
 # --- Output / storage ---
 OUTPUT_DIR: Path = Path(os.environ.get("CLIPPER_OUTPUT_DIR", "./output"))
@@ -186,7 +199,11 @@ DUO_LEAD_SEC: float = float(os.environ.get("CLIPPER_DUO_LEAD_SEC", "2.5"))
 # Auto-duo fallback: when diarization is unavailable/fails, switch to split-screen
 # automatically if two faces are detected. Lets duo work WITHOUT a HuggingFace
 # token (this fixes "split-screen never appears even though I set the token").
-DUO_AUTO_FACES: bool = os.environ.get("CLIPPER_DUO_AUTO_FACES", "1") in ("1", "true", "yes", "on")
+# v0.3.1: default 0 (OFF). Duo semantics per owner spec:
+#   HF ON  (CLIPPER_MULTI_SPEAKER=1 + HUGGINGFACE_TOKEN) -> duo split aktif otomatis.
+#   HF OFF -> SOLO crop-follow mulus, TIDAK PERNAH split (no chaos).
+# Auto-duo (2-wajah tanpa diarization) sekarang opt-in eksplisit.
+DUO_AUTO_FACES: bool = os.environ.get("CLIPPER_DUO_AUTO_FACES", "0") in ("1", "true", "yes", "on")
 # Min fraction of sampled frames that must show 2 faces before auto-duo kicks in.
 DUO_AUTO_FACE_RATIO: float = float(os.environ.get("CLIPPER_DUO_AUTO_FACE_RATIO", "0.35"))
 # When diarization is available, a DUO segment is only kept if two faces are

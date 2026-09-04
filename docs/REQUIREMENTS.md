@@ -5,6 +5,20 @@
 
 **Terakhir diperbarui:** 2026-09-04 (v0.3.0 — human steer, skor 5 dimensi, metadata posting bahasa konten, preset subtitle, multi-aspek, ZIP, smoke test offline)
 
+## 0a-ter. Changelog v0.3.1 (2026-09-04 — audit fase A/B, 2 bugfix kritis, fallback model Gemini, quality gate)
+
+1. **layout.py BUGFIX**: reset `solo_run` saat giliran pembicara berganti —
+   sebelumnya duo TIDAK PERNAH aktif pada diarization bergantian normal
+   (penyebab nyata keluhan "split gagal aktif meski HF token diisi").
+2. **jobs.py BUGFIX**: snap-cut `<= floor` → `< floor - 0.001` — konklusi yang
+   berakhir tepat di min_dur kini dipotong benar (dead air ekor hilang).
+3. **Dead code**: `window_has_two_faces` dihapus (audit: tidak pernah dipanggil).
+4. **Duo semantics**: `CLIPPER_DUO_AUTO_FACES` default 0; HF ON = duo split
+   otomatis (lead 2,5s, anti-telat, validasi wajah), HF OFF = solo mulus.
+5. **Analyzer**: `GEMINI_FALLBACK_MODELS` rantai fallback gratis +
+   `CLIPPER_MIN_VIRAL_SCORE` quality gate (anti clip asal).
+6. **Bukti**: 7/7 unit test logika PASS; smoke test render offline PASS.
+
 ## 0a-bis. Changelog v0.3.0 (2026-09-04 — riset kompetitor: Opus, Vizard, Klap, 2short, Clip.fm, quso, Wisecut, Riverside, Munch, SubMagic, Captions, CapCut, Eklipse, Spikes)
 
 > Dirancang dari keluhan pengguna nyata lintas platform (moment selection meleset,

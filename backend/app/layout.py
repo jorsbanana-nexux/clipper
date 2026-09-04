@@ -71,10 +71,21 @@ def layout_timeline(turns: list[dict], start: float, end: float,
 
     # --- assign layout per interval ---
     # Before the 2nd distinct speaker appears: solo. After: duo, EXCEPT we close
-    # back to solo when a solo-only (or silent) run reaches `min_solo`.
+    # back to solo when ONE speaker monologues for `min_solo`+ seconds.
+    #
+    # BUGFIX (v0.3.1 — the "duo never activates" bug): `solo_run` used to
+    # accumulate across EVERY single-speaker interval WITHOUT resetting on a
+    # speaker CHANGE. With normal alternating diarization (A talks, stops,
+    # B talks...) the two speakers never overlap, `n >= 2` never fires, and
+    # solo_run just kept growing -> the layout stuck on SINGLE forever, so the
+    # split-screen NEVER appeared even with HuggingFace diarization working
+    # perfectly. Fix: reset solo_run whenever the ACTIVE SPEAKER CHANGES —
+    # an exchange (turn-taking) is a live conversation and stays DUO; only a
+    # LONG MONOLOGUE by the same speaker closes the split.
     layout_by_iv: list[list] = []
     seen: set = set()
     solo_run = 0.0
+    prev_active: set = set()
     for a, b, active in intervals:
         seen |= set(active)
         seen_duo = len(seen) >= 2
@@ -86,8 +97,11 @@ def layout_timeline(turns: list[dict], start: float, end: float,
             solo_run = 0.0
             layout = LAYOUT_DUO
         else:
+            if set(active) != prev_active:
+                solo_run = 0.0  # the speaker CHANGED -> conversation is alive
             solo_run += (b - a)
             layout = LAYOUT_SINGLE if solo_run >= min_solo else LAYOUT_DUO
+        prev_active = set(active)
         layout_by_iv.append([a, b, layout])
 
     # --- coalesce contiguous same-layout runs ---

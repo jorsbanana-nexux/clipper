@@ -46,10 +46,13 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Analisis dulu, download kemudian** — AI membaca transkrip (dari caption, 0 MB audio),
   menemukan momen (mis. menit `01:20–02:34`), lalu hanya segmen video itu yang diunduh → hemat bandwith & waktu.
 - **Face tracking nyata** (MediaPipe + OpenCV Haar fallback) — bingkai 9:16 mengikuti wajah pembicara.
-- **Multi-speaker (v0.2)** — deteksi banyak wajah, split-screen duo (2 pembicara), dan speaker
-  (crop kiri/kanan untuk 2 pembicara berdampingan), dan speaker
-  diarization opsional (pyannote) untuk auto-decision single vs duo. Tanpa `HUGGINGFACE_TOKEN`
-  otomatis fallback ke single-speaker (ringan).
+- **Multi-speaker (v0.2 + fix kritikal v0.3.1)** — split-screen duo atas-bawah
+  aktif OTOMATIS saat `CLIPPER_MULTI_SPEAKER=1` + `HUGGINGFACE_TOKEN`:
+  layar terbelah 2,5 detik SEBELUM pembicara ke-2 bicara (anti-telat), menutup
+  saat monolog panjang, buka lagi saat ada giliran bicara, dan jendela yang
+  ternyata cuma 1 wajah otomatis jadi solo. Tanpa token → SOLO crop-follow
+  mulus (tidak pernah kacau). *(v0.3.1 memperbaiki bug di mana duo tidak
+  pernah aktif pada percakapan bergantian normal.)*
 - **Subtitle MrBeast strict** — teks 100% tanpa tanda baca, maks 2 baris di tengah layar, font Komika Axis tebal, stroke hitam tebal, bounce per kata 100→120→95→100%, HANYA kata yang sedang diucapkan menyala kuning lalu kembali putih.
 - **Kualitas 720/1080** — format `bestvideo[height<=1080]`.
 - **Efek viral** — kontras + saturasi + sharpen ringan.
@@ -62,7 +65,9 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
 - **Human steer** — beri topik/instruksi SEBELUM render ("AI-nya memilih bagian
   membosankan" = keluhan #1 semua platform; di sini kamu punya suara).
 - **Skor viral 5 dimensi** — hook/payoff/emosi/quotable/energi, transparan di UI,
-  bukan sekadar angka 1-10 misterius.
+  bukan sekadar angka 1-10 misterius. Plus **quality gate** (skor < 4 dibuang)
+  dan **rantai fallback model Gemini gratis** (analisis tak pernah mati
+  karena satu model sibuk/dipensiunkan).
 - **Caption + hashtag siap posting** — dibuat dalam BAHASA KONTEN (khususnya
   Indonesia — tidak ada platform global yang melakukan ini), tinggal copy.
 - **4 preset subtitle** — MrBeast (pop kuning), Hormozi (besar hijau),

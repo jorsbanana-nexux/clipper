@@ -75,8 +75,8 @@ def _snap_cut_boundaries(highlights, segments, min_dur: float = 15.0) -> None:
             s_end = float(s["end"])
             if s_end > end + 0.25:
                 continue
-            if s_end <= floor:
-                break
+            if s_end < floor - 0.001:
+                break  # below minimum duration — stop looking
             if re.search(r"[.!?…]", s.get("text") or ""):
                 best = s_end
                 break
@@ -87,8 +87,8 @@ def _snap_cut_boundaries(highlights, segments, min_dur: float = 15.0) -> None:
                 s_end = float(s["end"])
                 if s_end > end + 0.25:
                     continue
-                if s_end <= floor:
-                    break
+                if s_end < floor - 0.001:
+                    break  # below minimum duration — stop looking
                 nxt = None
                 for t in segs:
                     if float(t["start"]) > s_end + 0.01:
@@ -474,6 +474,15 @@ async def _run_pipeline(job: Job, request) -> None:
         # CUT RULE (in code): trim trailing filler/dead air the LLM may have
         # left — every clip must end right after the payoff's final word.
         _snap_cut_boundaries(highlights, analysis_segments, config.MIN_CLIP_SEC)
+        # QUALITY GATE (v0.3.1): buang momen asal/basah. Prompt v2 sudah
+        # menyuruh AI jujur — ini lapisan kedua di KODE. Tidak pernah
+        # mengosongkan hasil (kalau semua lemah, yang terbaik tetap keluar).
+        gate = max(1, getattr(config, "MIN_VIRAL_SCORE", 4))
+        strong = [h for h in highlights if h.viral_score >= gate]
+        if strong and len(strong) < len(highlights):
+            dropped = len(highlights) - len(strong)
+            highlights = strong
+            job.update(message=f"Quality gate: {dropped} clip lemah dibuang (skor < {gate})")
 
         # ---- 3. render each clip (bounded by CLIPPER_MAX_PARALLEL) ----
         total = max(1, len(highlights))

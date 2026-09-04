@@ -198,12 +198,34 @@ def _analyze_gemini(prompt: str) -> HighlightAnalysis:
             "google-genai not installed. Run: pip install -U google-genai")
 
     client = genai.Client(api_key=config.GEMINI_API_KEY)
+    # v0.3.1: MODEL FALLBACK CHAIN. Model utama 404/deprecated atau sibuk ->
+    # otomatis lanjut ke model gratis berikutnya. Analysis tidak pernah mati
+    # hanya karena Google mempensiunkan/menyibukkan satu model.
+    models = [config.GEMINI_MODEL] + [
+        m for m in getattr(config, "GEMINI_FALLBACK_MODELS", []) if m
+    ]
+    last_model_err: Exception | None = None
+    for model_name in models:
+        try:
+            return _gemini_generate(client, model_name, prompt)
+        except Exception as e:
+            last_model_err = e
+            msg = str(e)
+            fatal = ("API key" in msg or "permission" in msg.lower())
+            if fatal:
+                raise  # wrong key -> trying other models won't help
+            continue  # model 404/503/429 -> try the next model in the chain
+    raise last_model_err if last_model_err else RuntimeError("Gemini: no models configured")
+
+
+def _gemini_generate(client, model_name: str, prompt: str) -> HighlightAnalysis:
+    """One model, with transient (503/429) retry + honest JSON parsing."""
     max_attempts = max(1, getattr(config, "GEMINI_RETRIES", 4))
     last_err: Exception | None = None
     for attempt in range(max_attempts):
         try:
             resp = client.models.generate_content(
-                model=config.GEMINI_MODEL,
+                model=model_name,
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     response_mime_type="application/json",
