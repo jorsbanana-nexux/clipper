@@ -74,7 +74,9 @@ TARGET_WIDTH: int = 1080
 TARGET_HEIGHT: int = 1920
 
 # --- Subtitle style ---
-SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Montserrat")
+# Mr Beast style: extra-bold font (Montserrat Black). Override to your own
+# bold font file if you bundle one via CLIPPER_FONT_DIR.
+SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Montserrat Black")
 # Font size is auto-scaled to fit max 2 lines on the safe area. This is the
 # base size before auto-fit. Mr Beast style = big, bold, high-contrast.
 SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "100"))

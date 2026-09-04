@@ -101,9 +101,16 @@ def _word_tags(w: dict, line_start: float) -> str:
     t0 = max(0, int(round((w["start"] - line_start) * 100)))
     t1 = max(t0 + 1, int(round((w["end"] - line_start) * 100)))
     d = max(1, t1 - t0)
-    pop = max(1.0, float(getattr(config, "SUBTITLE_POP", 1.18)))
+    pop = max(1.0, float(getattr(config, "SUBTITLE_POP", 1.25)))
     scale = int(round(pop * 100))
-    return f"{{\\kf{d}\\t({t0},{t1},\\fscx{scale}\\fscy{scale})}}"
+    mid = (t0 + t1) // 2
+    # Per-word BOUNCE (per the Mr Beast tutorial): scale UP in the first half
+    # of the spoken window, then settle BACK in the second half.
+    return (
+        f"{{\\kf{d}"
+        f"\\t({t0},{mid},\\fscx{scale}\\fscy{scale})"
+        f"\\t({mid},{t1},\\fscx100\\fscy100)}}"
+    )
 
 
 def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single") -> str:
