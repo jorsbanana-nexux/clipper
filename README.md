@@ -70,7 +70,8 @@ tempel URL ──► ambil transkrip dari captions (0 MB audio) ──► GPT an
   karena satu model sibuk/dipensiunkan).
 - **Caption + hashtag siap posting** — dibuat dalam BAHASA KONTEN (khususnya
   Indonesia — tidak ada platform global yang melakukan ini), tinggal copy.
-- **4 preset subtitle** — MrBeast (pop kuning), Hormozi (besar hijau),
+- **4 preset subtitle** — MrBeast (pop biru elektrik #00E5FF — replikasi
+  frame-by-frame dari video tutorial referensi, cue sadar-kalimat, maks 2 baris),
   Karaoke (isi progresif), Minimal — atau tanpa subtitle. Per job, dari UI.
 - **Export multi-aspek** — 9:16 native, plus 1:1 & 4:5 (face-safe, blur-pad).
 - **Anti-klip-repetitif** — prompt melarang momen duplikat; lebih baik 5 clip

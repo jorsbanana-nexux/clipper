@@ -115,6 +115,29 @@ Munch "no support from a person"):
    (2 kasus), gate kualitas, validasi duo vs wajah — 7/7 PASS. Smoke test
    render end-to-end offline: PASS.
 
+## 2d. Changelog v0.3.2 — REPLICASI PERSIS VIDEO REFERENSI MRBEAST (2026-09-04)
+
+> Video referensi youtube.com/watch?v=pf9vd2sny0M ("Mr Beast Subtitles |
+> Premiere Pro & After Effects Tutorial", Mograph Mindset & Captioneer)
+> ditonton frame-by-frame via browser otomatis dan dianalisis: font Komika
+> Axis size 125, kata aktif #00E5FF, putih + stroke hitam tebal, cue pendek.
+
+1. **Preset mrbeast v2**: kata aktif BIRU ELEKTRIK stabilo #00E5FF (dari video,
+   bukan kuning lama), size em 150 (6,7% tinggi frame/baris), outline 12,
+   bounce 120%->95%->100% sinkron per kata, cue 2-3 kata per kalimat.
+2. **BUGFIX LAYAR**: WrapStyle=2 = libass TIDAK membungkus otomatis -> cue
+   11..20 karakter dirender satu baris menembus tepi layar. Kini \N manual
+   disisipkan di batas lebar baris (maks 2 baris, terukur: 55% lebar frame).
+3. **BUGFIX SUBTITLE FACELESS**: _reframe_blur_pad MENERIMA ass_path lalu
+   MENGABAIKANNYA — konten tanpa wajah (screen recording, slide, game)
+   dirender TANPA subtitle diam-diam. Kini dibakar dalam pass yang sama.
+4. **Cue sadar-kalimat**: blok subtitle tidak pernah mencampur 2 kalimat
+   ("cukup 2 kalimat, bersih").
+5. **Posisi penonton**: sepertiga bawah (61-78% tinggi frame, terukur OpenCV) —
+   di atas zona UI TikTok/Shorts (~20% bawah), tidak menutupi wajah atas-tengah.
+6. Verifikasi objektif OpenCV: 2 baris maks, 6,7% tinggi frame, biru hanya pada
+   kata aktif. Smoke render + dynamic: PASS.
+
 ## 3. KEKURANGAN / GAP yang diketahui (penting dibaca agent)
 
 > Ini daftar jujur hal-hal yang **belum beres**. Jangan dianggap sudah jalan.

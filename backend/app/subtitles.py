@@ -89,10 +89,18 @@ def _build_groups(words: list[dict], width: int, height: int, p: dict) -> list[l
     if not cleaned:
         return []
 
+    # Sentence-aware cues (viewer perspective): a cue NEVER mixes sentences.
+    # When a word ends with sentence-final punctuation the cue closes right
+    # after it, so each caption block reads as 1 clean, complete thought
+    # ("cukup 2 kalimat, bersih, tidak banyak") instead of splicing the tail
+    # of one sentence onto the head of the next.
+    sent_end = re.compile(r"[.!?…]+$")
+
     groups: list[list[dict]] = []
     cur: list[dict] = []
     cur_text = ""
     for w, c in cleaned:
+        sentence_done = bool(sent_end.search(w["word"].strip()))
         candidate = (cur_text + " " + c).strip()
         if _lines_for(candidate) > max_lines:
             # would overflow the line budget -> close current cue and start new
@@ -100,11 +108,15 @@ def _build_groups(words: list[dict], width: int, height: int, p: dict) -> list[l
                 groups.append(cur)
             cur = [w]
             cur_text = c
+            if sentence_done:
+                groups.append(cur)
+                cur = []
+                cur_text = ""
             continue
         cur.append(w)
         cur_text = candidate
         dur = cur[-1]["end"] - cur[0]["start"]
-        if len(cur) >= max_words and dur >= min_dur:
+        if sentence_done or len(cur) >= max_words and dur >= min_dur:
             groups.append(cur)
             cur = []
             cur_text = ""
@@ -192,7 +204,11 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
     if mode == "duo":
         margin_v = int(height * 0.46)   # center seam between the two faces
     else:
-        margin_v = int(height * 0.34)
+        # Perspektif penonton (referensi video MrBeast + UI TikTok/Shorts):
+        # teks duduk di sepertiga bawah, tepat DI ATAS zona UI platform
+        # (tombol, caption, progress bar memakan ~15-20% bawah layar),
+        # sekaligus tidak menutupi wajah yang berada di area atas-tengah.
+        margin_v = int(height * 0.22)
 
     header = (
         "[Script Info]\n"
@@ -219,7 +235,15 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
     for group in groups:
         start = group[0]["start"]
         end = group[-1]["end"]
-        parts = []
+        # BUGFIX v0.3.1 (layar): WrapStyle=2 membuat libass TIDAK membungkus
+        # otomatis — cue 11..20 karakter akan dirender SATU baris yang menembus
+        # tepi layar. Solusi: hitung batas karakter per baris dari preset,
+        # lalu sisipkan \N manual sebagai pemotong baris (maks 2 baris).
+        budget = _max_chars_per_line(width, size)
+        max_lines = max(1, config.MAX_SUBTITLE_LINES)
+        parts: list[str] = []
+        line_len = 0
+        lines_used = 1
         for i, w in enumerate(group):
             cleaned = _clean_word(w["word"])
             if not cleaned:
@@ -227,7 +251,15 @@ def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single
             if uppercase:
                 cleaned = cleaned.upper()
             next_start = group[i + 1]["start"] if i + 1 < len(group) else None
-            parts.append(f"{tag_fn(w, start, p, next_start)}{cleaned}")
+            piece = f"{tag_fn(w, start, p, next_start)}{cleaned}"
+            add = len(cleaned) + (1 if line_len else 0)   # +1 = spasi antar kata
+            if line_len and line_len + add > budget and lines_used < max_lines:
+                parts.append("\\N")                    # pemotong baris manual
+                line_len = 0
+                add = len(cleaned)
+                lines_used += 1
+            parts.append(piece)
+            line_len += add
         if not parts:
             continue
         text = " ".join(parts)

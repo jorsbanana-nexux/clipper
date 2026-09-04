@@ -5,6 +5,16 @@
 
 **Terakhir diperbarui:** 2026-09-04 (v0.3.0 — human steer, skor 5 dimensi, metadata posting bahasa konten, preset subtitle, multi-aspek, ZIP, smoke test offline)
 
+## 0a-ter2. Changelog v0.3.2 (2026-09-04 — replikasi video referensi MrBeast + 2 bugfix subtitle)
+
+1. **mrbeast preset v2** (analisis frame-by-frame video referensi): aktif
+   #00E5FF (ASS &H00FFE500), em 150, outline 12, Komika Axis.
+2. **BUGFIX**: \N manual di WrapStyle 2 — cue panjang tidak lagi menembus layar.
+3. **BUGFIX**: _reframe_blur_pad mengabaikan ass_path — konten faceless kini
+   ber-subtitle.
+4. **Cue sadar-kalimat** + posisi 61-78% tinggi frame (aman UI, perspektif
+   penonton). Verifikasi OpenCV objektif.
+
 ## 0a-ter. Changelog v0.3.1 (2026-09-04 — audit fase A/B, 2 bugfix kritis, fallback model Gemini, quality gate)
 
 1. **layout.py BUGFIX**: reset `solo_run` saat giliran pembicara berganti —

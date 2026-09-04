@@ -1,0 +1,23 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+fontsdir: /app/conversations/6a9a94b25483a3e04fcb5d70/repo/fonts
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Word,Komika Axis,150,&H00FFFFFF,&H00FFE500,&H00000000,&H70141014,-1,0,0,0,100,100,0,0,1,12,2,2,32,32,422,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+
+Dialogue: 0,0:00:00.80,0:00:01.96,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}THIS {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}IS \N {\t(840,968,\fscx120\fscy120)\t(968,1080,\fscx95\fscy95)\t(1080,1160,\fscx100\fscy100)\t(840,880,\c&H00FFE500)\t(1160,1200,\c&H00FFFFFF)}EXACTLY
+Dialogue: 0,0:00:02.06,0:00:03.22,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}THE {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}MR {\t(840,968,\fscx120\fscy120)\t(968,1080,\fscx95\fscy95)\t(1080,1160,\fscx100\fscy100)\t(840,880,\c&H00FFE500)\t(1160,1200,\c&H00FFFFFF)}BEAST
+Dialogue: 0,0:00:03.32,0:00:04.46,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}STYLE {\t(820,948,\fscx120\fscy120)\t(948,1060,\fscx95\fscy95)\t(1060,1140,\fscx100\fscy100)\t(820,860,\c&H00FFE500)\t(1140,1180,\c&H00FFFFFF)}EVERY
+Dialogue: 0,0:00:04.56,0:00:05.72,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}ACTIVE {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}WORD \N {\t(840,968,\fscx120\fscy120)\t(968,1080,\fscx95\fscy95)\t(1080,1160,\fscx100\fscy100)\t(840,880,\c&H00FFE500)\t(1160,1200,\c&H00FFFFFF)}TURNS
+Dialogue: 0,0:00:05.82,0:00:07.38,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}ELECTRIC \N {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}BLUE {\t(1240,1368,\fscx120\fscy120)\t(1368,1480,\fscx95\fscy95)\t(1480,1560,\fscx100\fscy100)\t(1240,1280,\c&H00FFE500)\t(1560,1600,\c&H00FFFFFF)}THEN
+Dialogue: 0,0:00:07.48,0:00:08.64,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}IT {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}GOES {\t(840,968,\fscx120\fscy120)\t(968,1080,\fscx95\fscy95)\t(1080,1160,\fscx100\fscy100)\t(840,880,\c&H00FFE500)\t(1160,1200,\c&H00FFFFFF)}BACK
+Dialogue: 0,0:00:08.74,0:00:10.30,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}TO {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}WHITE \N {\t(1240,1368,\fscx120\fscy120)\t(1368,1480,\fscx95\fscy95)\t(1480,1560,\fscx100\fscy100)\t(1240,1280,\c&H00FFE500)\t(1560,1600,\c&H00FFFFFF)}CLEAN
+Dialogue: 0,0:00:10.40,0:00:11.56,Word,,0,0,0,,{\t(0,128,\fscx120\fscy120)\t(128,240,\fscx95\fscy95)\t(240,320,\fscx100\fscy100)\t(0,40,\c&H00FFE500)\t(320,360,\c&H00FFFFFF)}TWO {\t(420,548,\fscx120\fscy120)\t(548,660,\fscx95\fscy95)\t(660,740,\fscx100\fscy100)\t(420,460,\c&H00FFE500)\t(740,780,\c&H00FFFFFF)}LINES \N {\t(840,968,\fscx120\fscy120)\t(968,1080,\fscx95\fscy95)\t(1080,1160,\fscx100\fscy100)\t(840,880,\c&H00FFE500)\t(1160,1200,\c&H00FFFFFF)}MAXIMUM

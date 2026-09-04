@@ -431,13 +431,19 @@ def _probe_fps(video_path: str) -> float:
 
 
 def _reframe_blur_pad(video_path, output_path, ass_path=None):
+    """Blur-pad reframe (no usable faces). v0.3.1 BUGFIX: `ass_path` used to be
+    ACCEPTED BUT IGNORED — faceless content (screen recordings, slides, game
+    footage) was silently rendered WITHOUT its subtitles. Now the subtitle +
+    effects chain is folded into this same encode, matching the crop-follow
+    and duo paths."""
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
     vf = (
         f"split[bg][fg];"
         f"[bg]scale={TW}:{TH}:force_original_aspect_ratio=increase,crop={TW}:{TH},"
         f"gblur=sigma=20[bg];"
         f"[fg]scale={TW}:-2[fg];"
-        f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+        f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+        + renderer.effects_vf(ass_path)
     )
     subprocess.run([
         FFMPEG, "-i", video_path, "-vf", vf,

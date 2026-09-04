@@ -227,9 +227,18 @@ TAIL_SEC: float = float(os.environ.get("CLIPPER_TAIL_SEC", "0.35"))
 # Colours are ASS &HAABBGGRR.
 SUBTITLE_PRESETS: dict = {
     "mrbeast": {
-        "font": "Komika Axis", "size": 100, "uppercase": False,
-        "base_color": "&H00FFFFFF", "pop_color": "&H0000FFFF",
-        "outline": 8, "shadow": 3, "back_color": "&H70141014",
+        # Replikasi STRICT dari video referensi youtube.com/watch?v=pf9vd2sny0M
+        # ("Mr Beast Subtitles | Premiere Pro & After Effects Tutorial",
+        #  Mograph Mindset & Captioneer) — dianalisis frame-by-frame:
+        #  - Font Komika Axis (persis tutorial, sudah bundled di repo)
+        #  - Kata AKTIF: biru elektrik stabilo #00E5FF (dari video),
+        #    kata lain PUTIH, stroke hitam tebal, bounce 120%->95%->100%
+        #  - Size ~125 @ sequence 1080p horizontal -> skala proporsional utk
+        #    9:16 (em 150): menonjol & terbaca penuh di layar ponsel
+        #  - Cue pendek 2-3 kata, maks 2 baris (bersih, gaya MrBeast)
+        "font": "Komika Axis", "size": 150, "uppercase": False,
+        "base_color": "&H00FFFFFF", "pop_color": "&H00FFE500",  # #00E5FF (ASS BGR)
+        "outline": 12, "shadow": 2, "back_color": "&H70141014",
         "pop": 1.20, "dip": 0.95, "words": 2, "min_dur": 0.9, "overflow": 5,
         "karaoke": False,  # strict pop: only the ACTIVE word flashes
     },
