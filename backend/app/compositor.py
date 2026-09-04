@@ -62,6 +62,13 @@ def _render_segment(video_path: str, start: float, end: float, use_duo: bool, ou
         samples = face_tracker.analyze_faces(cut)
         face_tracker.reframe_to_vertical(cut, reframed, samples)
     _normalize_video_only(reframed, out_path)
+    # BUGFIX: intermediate .cut/.ref files were left behind on disk after each
+    # segment render, bloating output folders.
+    for tmp in (cut, reframed):
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
     return out_path
 
 
@@ -76,6 +83,24 @@ def _xfade_concat(seg_files: list[str], out_path: str) -> str:
         return out_path
 
     durations = [_probe_duration(p) for p in seg_files]
+    # BUGFIX: xfade offsets become negative/invalid when any segment is shorter
+    # than the crossfade itself (ffmpeg then crashes). Rare with real speaker
+    # turns — fall back to a plain concat instead of dying.
+    if any(d <= CROSSFADE for d in durations):
+        lst = out_path + ".txt"
+        with open(lst, "w", encoding="utf-8") as f:
+            for p in seg_files:
+                f.write(f"file '{p}'\n")
+        subprocess.run([
+            FFMPEG, "-f", "concat", "-safe", "0", "-i", lst,
+            "-c:v", "libx264", "-preset", config.FFMPEG_PRESET,
+            "-crf", str(config.FFMPEG_CRF), "-y", out_path,
+        ], check=True, capture_output=True)
+        try:
+            os.remove(lst)
+        except OSError:
+            pass
+        return out_path
     cmd = [FFMPEG]
     for p in seg_files:
         cmd += ["-i", p]

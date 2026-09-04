@@ -128,13 +128,19 @@ def _word_tags(w: dict, line_start: float) -> str:
     d = max(1, t1 - t0)
     pop = max(1.0, float(getattr(config, "SUBTITLE_POP", 1.25)))
     scale = int(round(pop * 100))
-    mid = (t0 + t1) // 2
+    # BUGFIX: \t() transform times are MILLISECONDS relative to the cue start
+    # (only the \kf duration is centiseconds). The old code passed
+    # centiseconds, so the scale-pop finished in ~1/10 of the intended time —
+    # a ~20ms flash instead of a punchy bounce lasting the spoken word.
+    ms0 = t0 * 10
+    ms1 = t1 * 10
+    mid = (ms0 + ms1) // 2
     # Per-word BOUNCE (per the Mr Beast tutorial): scale UP in the first half
     # of the spoken window, then settle BACK in the second half.
     return (
         f"{{\\kf{d}"
-        f"\\t({t0},{mid},\\fscx{scale}\\fscy{scale})"
-        f"\\t({mid},{t1},\\fscx100\\fscy100)}}"
+        f"\\t({ms0},{mid},\\fscx{scale}\\fscy{scale})"
+        f"\\t({mid},{ms1},\\fscx100\\fscy100)}}"
     )
 
 

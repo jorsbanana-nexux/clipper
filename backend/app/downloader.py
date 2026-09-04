@@ -6,11 +6,15 @@ Strategy (matches the "download only selected parts" requirement):
 3. download_segment      -> only a time range of the VIDEO for each clip.
 4. download_audio_segment-> only a time range of the AUDIO (per-clip Whisper).
 """
+import hashlib
 import html
+import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -121,22 +125,43 @@ def download_segment(url: str, start: float, end: float, out_dir: str) -> str:
         return download_full_and_cut(url, start, end, out_dir)
 
 
+# Full-download fallback cache: when a range download fails, the FULL source
+# is downloaded ONCE per URL (per process) and every later clip cuts from the
+# cached file. BUGFIX: previously EACH clip re-downloaded the full video
+# (N clips -> up to N x ~1 GB of downloads).
+_FULL_CACHE: dict[str, str] = {}
+_FULL_CACHE_LOCK = threading.Lock()
+
+
+def _full_download_cached(url: str, fmt: str, prefix: str) -> str:
+    with _FULL_CACHE_LOCK:
+        key = f"{prefix}:{url}"
+        cached = _FULL_CACHE.get(key)
+        if cached and os.path.exists(cached):
+            return cached
+        cache_dir = os.path.join(tempfile.gettempdir(), "clipper_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        h = hashlib.sha1(url.encode()).hexdigest()[:16]
+        outtmpl = os.path.join(cache_dir, f"{prefix}_{h}.%(ext)s")
+        opts = _quiet_opts({"format": fmt, "outtmpl": outtmpl,
+                            "merge_output_format": "mp4"})
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+        found = [p for p in Path(cache_dir).glob(f"{prefix}_{h}.*")
+                 if p.suffix in (".mp4", ".webm", ".mkv", ".m4a", ".opus", ".mp3")]
+        if not found:
+            raise RuntimeError("Full download produced no usable file")
+        path = str(found[0])
+        _FULL_CACHE[key] = path
+        return path
+
+
 def download_full_and_cut(url: str, start: float, end: float, out_dir: str) -> str:
     os.makedirs(out_dir, exist_ok=True)
-    outtmpl = os.path.join(out_dir, "full.%(ext)s")
-    opts = _quiet_opts({
-        "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "outtmpl": outtmpl,
-        "merge_output_format": "mp4",
-    })
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
-    fulls = [p for p in Path(out_dir).glob("full.*") if p.suffix in (".mp4", ".webm", ".mkv")]
-    if not fulls:
-        raise RuntimeError("Full video download produced no usable file")
-    full = fulls[0]
+    full = _full_download_cached(
+        url, "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best", "full")
     cut = os.path.join(out_dir, "cut.mp4")
-    _ffmpeg_cut(str(full), start, end, cut)
+    _ffmpeg_cut(full, start, end, cut)
     return cut
 
 
@@ -158,7 +183,12 @@ def _strip_tags(text: str) -> str:
 
 
 def _parse_vtt_srt(content: str) -> list[dict]:
-    ts_re = re.compile(r"(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})")
+    # BUGFIX: YouTube auto-caption VTT uses MM:SS.mmm (no hours) for videos
+    # under 1 hour — the old regex required HH:MM:SS and matched nothing.
+    ts_re = re.compile(
+        r"(\d{1,2}:\d{2}:\d{2}[.,]\d{3}|\d{1,2}:\d{2}[.,]\d{3})"
+        r"\s*-->\s*"
+        r"(\d{1,2}:\d{2}:\d{2}[.,]\d{3}|\d{1,2}:\d{2}[.,]\d{3})")
     segments = []
     lines = content.splitlines()
     i = 0
@@ -182,6 +212,50 @@ def _parse_vtt_srt(content: str) -> list[dict]:
     return segments
 
 
+def _parse_srv(content: str) -> list[dict]:
+    """Parse YouTube srv1/srv3 timed-text XML (auto-captions)."""
+    segments = []
+    # srv1: <text start="12.08" dur="2.5">hello</text>
+    for m in re.finditer(
+            r'<text start="([\d.]+)"(?:\s+dur="([\d.]+)")?[^>]*>(.*?)</text>',
+            content, re.S):
+        start = float(m.group(1))
+        dur = float(m.group(2) or 2.0)
+        text = _strip_tags(m.group(3))
+        if text:
+            segments.append({"start": start, "end": start + dur, "text": text})
+    if segments:
+        return segments
+    # srv3: <p t="12080" d="2560"><s>hello</s></p>
+    for m in re.finditer(
+            r'<p[^>]*\bt="(\d+)"(?:\s+d="(\d+)")?[^>]*>(.*?)</p>',
+            content, re.S):
+        start = int(m.group(1)) / 1000.0
+        dur = int(m.group(2) or 2000) / 1000.0
+        text = _strip_tags(m.group(3))
+        if text:
+            segments.append({"start": start, "end": start + dur, "text": text})
+    return segments
+
+
+def _parse_json3(content: str) -> list[dict]:
+    """Parse YouTube json3 caption JSON (auto-captions)."""
+    try:
+        data = json.loads(content)
+    except Exception:
+        return []
+    segments = []
+    for ev in data.get("events", []):
+        segs = ev.get("segs") or []
+        text = "".join(s.get("utf8", "") for s in segs if s.get("utf8")).strip()
+        if not text:
+            continue
+        start = (ev.get("tStartMs") or 0) / 1000.0
+        dur = (ev.get("dDurationMs") or 2000) / 1000.0
+        segments.append({"start": start, "end": start + dur, "text": text})
+    return segments
+
+
 def fetch_captions(url: str):
     '''Return (segments, lang, title) from YouTube captions (0 audio download).
     Returns (None, None, None) when captions cannot be fetched or parsed.'''
@@ -200,7 +274,8 @@ def fetch_captions(url: str):
         )
         for lang in langs:
             for entry in subs.get(lang, []):
-                if entry.get("ext") not in ("vtt", "srt"):
+                ext = entry.get("ext")
+                if ext not in ("vtt", "srt", "srv1", "srv3", "json3"):
                     continue
                 sub_url = entry.get("url")
                 if not sub_url:
@@ -208,7 +283,15 @@ def fetch_captions(url: str):
                 try:
                     with urllib.request.urlopen(sub_url, timeout=30) as r:
                         content = r.read().decode("utf-8", errors="replace")
-                    segs = _parse_vtt_srt(content)
+                    # BUGFIX: YouTube auto-captions are often ONLY offered as
+                    # json3/srv1/srv3 — filtering them out made fetch_captions
+                    # fail and forced the expensive full-audio fallback.
+                    if ext == "json3":
+                        segs = _parse_json3(content)
+                    elif ext in ("srv1", "srv3"):
+                        segs = _parse_srv(content)
+                    else:
+                        segs = _parse_vtt_srt(content)
                     if segs:
                         return segs, (lang.split("-")[0].lower() if lang else None), info.get("title")
                 except Exception:
@@ -239,21 +322,13 @@ def download_audio_segment(url: str, start: float, end: float, out_dir: str) -> 
 
 def download_full_audio_and_cut(url: str, start: float, end: float, out_dir: str) -> str:
     os.makedirs(out_dir, exist_ok=True)
-    outtmpl = os.path.join(out_dir, "afull.%(ext)s")
-    opts = _quiet_opts({
-        "format": "bestaudio/best",
-        "outtmpl": outtmpl,
-    })
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
-    fulls = [p for p in Path(out_dir).glob("afull.*")]
-    if not fulls:
-        raise RuntimeError("Full audio download produced no file")
-    full = fulls[0]
-    cut = os.path.join(out_dir, f"acut{full.suffix}")
+    # BUGFIX: shares the per-process full-download cache — the full audio is
+    # fetched once per URL instead of once per clip.
+    full = _full_download_cached(url, "bestaudio/best", "afull")
+    cut = os.path.join(out_dir, f"acut{Path(full).suffix}")
     dur = end - start
     subprocess.run([
-        FFMPEG, "-ss", str(start), "-t", str(dur), "-i", str(full),
+        FFMPEG, "-ss", str(start), "-t", str(dur), "-i", full,
         "-c", "copy", "-y", cut,
     ], check=True, capture_output=True)
     return cut

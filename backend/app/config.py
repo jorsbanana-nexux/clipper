@@ -133,6 +133,12 @@ FONT_DIR: str = os.environ.get(
 # Retention: delete job output folders older than N days (0 = keep forever).
 RETENTION_DAYS: float = float(os.environ.get("CLIPPER_RETENTION_DAYS", "7"))
 
+# --- Transcript analysis budget (analyzer) ---
+# Max characters of transcript sent to the analysis LLM in one prompt.
+# 400k chars is roughly 100k tokens — comfortably inside Gemini flash's
+# 1M-token context and covers even 3-hour podcasts in full.
+TRANSCRIPT_MAX_CHARS: int = int(os.environ.get("CLIPPER_TRANSCRIPT_MAX_CHARS", "400000"))
+
 # yt-dlp resilience (optional).
 YDL_COOKIES_FILE: str = os.environ.get("YDL_COOKIES_FILE", "")   # path to cookies.txt
 YDL_PROXY: str = os.environ.get("YDL_PROXY", "")                 # e.g. http://127.0.0.1:8888

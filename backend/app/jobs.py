@@ -20,6 +20,33 @@ from . import config, downloader, transcriber, analyzer, subtitles, face_tracker
 from .models import ClipInfo, JobStatus
 
 
+def _remap_words_for_xfade(words: list[dict], timeline: list[dict],
+                           crossfade: float) -> list[dict]:
+    """Re-time subtitle words onto the crossfaded render timeline.
+
+    Each rendered segment k starts at sum_{j<k} (dur_j - crossfade). A word is
+    therefore shifted by a PER-SEGMENT constant offset — never linearly scaled.
+    """
+    rendered_starts = []
+    t = 0.0
+    for seg in timeline:
+        rendered_starts.append(t)
+        t += (seg["end"] - seg["start"]) - crossfade
+    out = []
+    for w in words:
+        mid = (w["start"] + w["end"]) / 2.0
+        idx = None
+        for i, seg in enumerate(timeline):
+            if seg["start"] <= mid < seg["end"]:
+                idx = i
+                break
+        if idx is None:
+            continue  # word sits outside any timeline window -> drop it
+        off = rendered_starts[idx] - timeline[idx]["start"]
+        out.append({**w, "start": w["start"] + off, "end": w["end"] + off})
+    return out
+
+
 def _brief_error(exc: BaseException) -> str:
     """Short human-readable description of a render exception, including ffmpeg
     stderr and return code when available."""
@@ -248,17 +275,13 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     report(0.35, "Membingkai ulang 9:16")
     if dynamic_layout:
         await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
-        # xfade shortens the output by (n-1)*CROSSFADE -> rescale subtitle times
-        # to the ACTUAL rendered duration so captions stay in sync.
+        # xfade overlaps neighbouring segments, so the rendered timeline is
+        # shorter than the source by (n-1)*CROSSFADE. BUGFIX: the old LINEAR
+        # rescale drifted subtitles progressively out of sync after every
+        # layout transition; the correct mapping is a PER-SEGMENT offset.
         if local_words:
-            target_dur = padded_end - padded_start
-            actual_dur = renderer.probe_duration(vertical)
-            if actual_dur > 0.0 and actual_dur < target_dur * 0.999:
-                scale = actual_dur / target_dur
-                local_words = [
-                    {**w, "start": w["start"] * scale, "end": w["end"] * scale}
-                    for w in local_words
-                ]
+            local_words = _remap_words_for_xfade(
+                local_words, timeline, compositor.CROSSFADE)
         # Build ASS after scaling and burn in a dedicated pass (needed here).
         if local_words:
             Path(ass_path).write_text(

@@ -14,12 +14,33 @@ from . import config
 from .models import HighlightAnalysis
 
 
-def _format_segments(segments: list[dict], limit: int = 200) -> str:
+def _format_segments(segments: list[dict], limit: int = 0,
+                      max_chars: int | None = None) -> str:
+    """Format transcript segments for the LLM prompt.
+
+    BUGFIX(critical): this used to hard-cap at 200 segments, silently dropping
+    70-80% of the transcript on any video longer than ~15 minutes — the LLM
+    could then only pick "viral moments" from the opening minutes. Now the full
+    transcript is sent, bounded only by a generous character budget (Gemini
+    flash has a 1M-token context; 400k chars is ~100k tokens, i.e. even a
+    3-hour podcast fits).
+    """
+    if max_chars is None:
+        max_chars = getattr(config, "TRANSCRIPT_MAX_CHARS", 400_000)
     lines = []
-    for s in segments[:limit]:
+    total = 0
+    count = 0
+    for s in segments:
+        if limit and count >= limit:
+            break
         start = s.get("start", 0.0)
         text = (s.get("text") or "").strip().replace("\n", " ")
-        lines.append(f"[{start:7.2f}s] {text}")
+        line = f"[{start:7.2f}s] {text}"
+        if total + len(line) > max_chars:
+            break
+        lines.append(line)
+        total += len(line) + 1
+        count += 1
     return "\n".join(lines)
 
 

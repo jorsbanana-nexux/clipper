@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 from openai import OpenAI
@@ -102,6 +103,26 @@ def _split_audio(audio_path: str, chunk_sec: float, tmp_dir: str) -> list[str]:
     return sorted(str(p) for p in Path(tmp_dir).glob(f"chunk_*{src_ext}"))
 
 
+# BUGFIX: WhisperModel used to be re-created on EVERY transcription call —
+# reloading the weights for each clip (severe CPU/RAM thrash; parallel renders
+# each loaded their own copy of the model). One instance is now loaded lazily
+# and reused for the process lifetime.
+_MODEL = None
+_MODEL_SIZE = None
+_MODEL_LOCK = threading.Lock()
+
+
+def _get_local_model():
+    global _MODEL, _MODEL_SIZE
+    with _MODEL_LOCK:
+        size = getattr(config, "WHISPER_MODEL_SIZE", "small")
+        if _MODEL is None or _MODEL_SIZE != size:
+            from faster_whisper import WhisperModel
+            _MODEL = WhisperModel(size, device="cpu", compute_type="int8")
+            _MODEL_SIZE = size
+        return _MODEL
+
+
 def _transcribe_local(audio_path: str, language: str | None) -> dict:
     """Free local transcription via faster-whisper (0 OpenAI cost).
 
@@ -109,10 +130,7 @@ def _transcribe_local(audio_path: str, language: str | None) -> dict:
     word-level timestamps locally. Runs on CPU (compute_type=int8) so it works
     on low-RAM laptops. Model size via WHISPER_MODEL_SIZE (small/tiny/base).
     """
-    from faster_whisper import WhisperModel
-
-    size = getattr(config, "WHISPER_MODEL_SIZE", "small")
-    model = WhisperModel(size, device="cpu", compute_type="int8")
+    model = _get_local_model()
     segments_iter, info = model.transcribe(
         audio_path, language=language, word_timestamps=True, vad_filter=True)
 

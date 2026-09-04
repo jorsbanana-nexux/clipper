@@ -3,7 +3,20 @@
 > Dokumen ini adalah **sumber kebenaran (source of truth)** untuk spesifikasi,
 > arsitektur, dan roadmap. **Wajib diperbarui setiap ada tindakan/update/upgrade.**
 
-**Terakhir diperbarui:** 2026-09-02 (mode GRATIS: faster-whisper lokal + Gemini; + verifikasi A/B, fix event-loop, model valid)
+**Terakhir diperbarui:** 2026-09-04 (v0.2.1 — perbaikan bug audit: transkrip penuh ke LLM, timing pop subtitle, parser caption json3/srv/VTT-MM:SS, cache full-download, singleton Whisper, remap xfade per-segment, cleanup intermediates)
+
+## 0. Changelog v0.2.1 (bug-fix audit)
+
+Perbaikan hasil audit mikroskopis (semua sudah diverifikasi + unit test):
+
+1. **CRITICAL** `analyzer` — batas keras 200 segmen membuat LLM mengabaikan 70-80% transkrip video >15 menit. Sekarang transkrip PENUH dikirim (budget karakter 400k, konfigurable `CLIPPER_TRANSCRIPT_MAX_CHARS`).
+2. **HIGH** `subtitles` — `	()` ASS memakai milidetik, bukan centidetik; animasi pop selesai ~10x terlalu cepat. Diperbaiki (`ms0/ms1`).
+3. **HIGH** `downloader` — regex VTT mensyaratkan HH:MM:SS; auto-caption YouTube `<1 jam` memakai MM:SS.mmm → parse gagal. Diperbaiki.
+4. **HIGH** `downloader` — `fetch_captions` sekarang menerima + mem-parse `json3`/`srv1`/`srv3` (auto-caption YouTube sering HANYA tersedia dalam format itu) → fallback unduh audio penuh jauh lebih jarang.
+5. **HIGH** `downloader` — fallback full-download sekarang di-CACHE per URL (video & audio): sebelumnya N klip = N x unduh penuh (bisa gigabytes); sekarang 1x per URL.
+6. **HIGH** `transcriber` — WhisperModel kini singleton lazy (dulu dimuat ULANG per klip → thrash CPU/RAM paralel).
+7. **HIGH** `jobs` — remap timing subtitle setelah xfade: dulu rescale LINEER (makin nyaris out-of-sync tiap transisi layout); kini offset PER-SEGMENT eksak (`_remap_words_for_xfade`).
+8. **MEDIUM** `compositor` — xfade offset negatif saat segmen < crossfade → fallback concat (tidak crash lagi); file antara `.cut/.ref` dibersihkan.
 
 ---
 
