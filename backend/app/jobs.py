@@ -211,50 +211,53 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         clip_layout = layout.choose_template([], 0.0, 0.0)
         timeline = [{"start": 0.0, "end": loc_dur, "layout": clip_layout}]
 
-    vertical = str(seg_dir / "vertical.mp4")
     distinct = {s.get("layout") for s in timeline}
     dynamic_layout = len(timeline) > 1 and len(distinct) > 1
+
+    vertical = str(seg_dir / "vertical.mp4")
+    final = str(seg_dir / "final.mp4")
+    ass_path = str(seg_dir / "subs.ass")
+    sub_mode = "duo" if any(s.get("layout") == layout.LAYOUT_DUO for s in timeline) else "single"
+
     job.update(status="rendering", stage=f"render_{index}/reframe",
                message=f"Clip {index}: membingkai ulang 9:16 + tracking wajah")
     if dynamic_layout:
         await asyncio.to_thread(compositor.render_dynamic_clip, raw_path, timeline, vertical)
-    elif timeline and timeline[0].get("layout") == "duo":
-        await asyncio.to_thread(face_tracker.reframe_duo, raw_path, vertical)
+        # xfade shortens the output by (n-1)*CROSSFADE -> rescale subtitle times
+        # to the ACTUAL rendered duration so captions stay in sync.
+        if local_words:
+            target_dur = padded_end - padded_start
+            actual_dur = renderer.probe_duration(vertical)
+            if actual_dur > 0.0 and actual_dur < target_dur * 0.999:
+                scale = actual_dur / target_dur
+                local_words = [
+                    {**w, "start": w["start"] * scale, "end": w["end"] * scale}
+                    for w in local_words
+                ]
+        # Build ASS after scaling and burn in a dedicated pass (needed here).
+        if local_words:
+            Path(ass_path).write_text(
+                subtitles.words_to_ass(
+                    local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode),
+                encoding="utf-8")
+            await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
+        else:
+            shutil.copy(vertical, final)
     else:
-        samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
-        await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, vertical, samples)
-
-    # B5 sync fix: xfade crossfades shorten the output by (n-1)*CROSSFADE, so the
-    # real video is a bit shorter than (padded_end - padded_start). Subtitle times
-    # are in local [0, target_dur]; scale them to the ACTUAL rendered duration so
-    # word-by-word captions stay exactly in sync with the (slightly compressed)
-    # dynamic video instead of running past the end / drifting.
-    if dynamic_layout and local_words:
-        target_dur = padded_end - padded_start
-        actual_dur = renderer.probe_duration(vertical)
-        if actual_dur > 0.0 and actual_dur < target_dur * 0.999:
-            scale = actual_dur / target_dur
-            local_words = [
-                {**w, "start": w["start"] * scale, "end": w["end"] * scale}
-                for w in local_words
-            ]
-
-    ass_path = str(seg_dir / "subs.ass")
-    if local_words:
-        job.update(status="rendering", stage=f"reframe_{index}/subs",
-                   message=f"Clip {index}: membakar subtitle word-by-word + efek")
-        # Layout-aware subtitle: if the clip has any duo (split-screen) segment,
-        # position text in the center seam so it doesn't cover the lower face.
-        sub_mode = "duo" if any(s.get("layout") == layout.LAYOUT_DUO for s in timeline) else "single"
-        ass_content = subtitles.words_to_ass(
-            local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode)
-        Path(ass_path).write_text(ass_content, encoding="utf-8")
-
-    final = str(seg_dir / "final.mp4")
-    if local_words:
-        await asyncio.to_thread(renderer.burn_subtitles_and_effects, vertical, ass_path, final)
-    else:
-        shutil.copy(vertical, final)
+        # Non-dynamic: fold subtitle + effects into the SAME reframe pass ->
+        # ONE encode instead of two (the core batch speedup).
+        if local_words:
+            job.update(status="rendering", stage=f"reframe_{index}/subs",
+                       message=f"Clip {index}: membakar subtitle word-by-word + efek")
+            Path(ass_path).write_text(
+                subtitles.words_to_ass(
+                    local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode),
+                encoding="utf-8")
+        if timeline and timeline[0].get("layout") == "duo":
+            await asyncio.to_thread(face_tracker.reframe_duo, raw_path, final, ass_path if local_words else None)
+        else:
+            samples = await asyncio.to_thread(face_tracker.analyze_faces, raw_path)
+            await asyncio.to_thread(face_tracker.reframe_to_vertical, raw_path, final, samples, ass_path if local_words else None)
 
     await asyncio.to_thread(renderer.verify_output, final, max(1.0, (padded_end - padded_start) * 0.5))
 

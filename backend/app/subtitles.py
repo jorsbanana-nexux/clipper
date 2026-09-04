@@ -59,32 +59,57 @@ def _max_chars_per_line(width: int, font_size: int) -> int:
 
 
 def _build_groups(words: list[dict], width: int, height: int) -> list[list[dict]]:
-    """Group words so each group fits in at most MAX_SUBTITLE_LINES lines."""
+    """Group words into short cues (Mr Beast style, ~MAX_SUBTITLE_WORDS words).
+
+    Pacing rules (viewer-friendly, adapts to speech speed):
+    - Target ~MAX_SUBTITLE_WORDS (2) words per cue by default.
+    - But a cue must stay on screen at least MIN_SUBTITLE_DUR seconds. When a
+      speaker talks FAST (so 2 words would flash by too quickly / feel chaotic),
+      we keep joining words into the SAME cue until it meets the minimum duration
+      (capped at MAX_SUBTITLE_WORDS_OVERFLOW). When they talk SLOWLY, 2 words
+      naturally sit longer — calm, not rushed.
+    - Also respects MAX_SUBTITLE_LINES (never wraps into a wall of text).
+    """
     size = config.SUBTITLE_SIZE
     budget = _max_chars_per_line(width, size)
     max_lines = max(1, config.MAX_SUBTITLE_LINES)
+    max_words = max(1, config.MAX_SUBTITLE_WORDS)
+    min_dur = max(0.0, config.MIN_SUBTITLE_DUR)
+    overflow = max(max_words, config.MAX_SUBTITLE_WORDS_OVERFLOW)
 
     def _lines_for(text: str) -> int:
         if not text:
             return 0
         return max(1, -(-len(text) // budget))
 
+    cleaned = [(w, _clean_word(w["word"])) for w in words]
+    cleaned = [(w, c) for w, c in cleaned if c]
+    if not cleaned:
+        return []
+
     groups: list[list[dict]] = []
     cur: list[dict] = []
     cur_text = ""
-    for w in words:
-        cleaned = _clean_word(w["word"])
-        if not cleaned:
-            continue
-        candidate = (cur_text + " " + cleaned).strip()
-        if _lines_for(candidate) <= max_lines:
-            cur.append(w)
-            cur_text = candidate
-        else:
+    for w, c in cleaned:
+        candidate = (cur_text + " " + c).strip()
+        if _lines_for(candidate) > max_lines:
+            # would overflow the line budget -> close current cue and start new
             if cur:
                 groups.append(cur)
             cur = [w]
-            cur_text = cleaned
+            cur_text = c
+            continue
+        cur.append(w)
+        cur_text = candidate
+        dur = cur[-1]["end"] - cur[0]["start"]
+        if len(cur) >= max_words and dur >= min_dur:
+            groups.append(cur)
+            cur = []
+            cur_text = ""
+        elif len(cur) >= overflow:
+            groups.append(cur)
+            cur = []
+            cur_text = ""
     if cur:
         groups.append(cur)
     return groups

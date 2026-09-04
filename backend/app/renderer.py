@@ -19,17 +19,31 @@ def _fpath(p: str) -> str:
     return p.replace("\\", "/")
 
 
-def burn_subtitles_and_effects(video_path, ass_path, out_path):
-    vf = (
-        f"ass={_fpath(ass_path)},"
+def effects_vf(ass_path: str | None = None) -> str:
+    """FFmpeg -vf suffix for subtitles + viral effects. Reused so a reframe pass
+    and the subtitle/effects pass can be merged into ONE encode (faster batch)."""
+    chain = (
         f"eq=contrast=1.06:saturation=1.15:brightness=0.01,"
         f"unsharp=5:5:0.6:5:5:0.0"
     )
+    if ass_path and os.path.exists(ass_path):
+        chain = f"ass={_fpath(ass_path)}," + chain
+    return chain
+
+
+def encode_video(src: str, out_path: str, vf: str, audio: str = "copy") -> str:
+    """Encode once from `src` to `out_path` with a filtergraph, using the global
+    speed preset. Single-pass = the core batch speedup (fewer re-encodes)."""
     subprocess.run([
-        FFMPEG, "-i", video_path, "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "copy", "-y", out_path,
+        FFMPEG, "-i", src, "-vf", vf,
+        "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF),
+        "-c:a", audio, "-pix_fmt", "yuv420p", "-y", out_path,
     ], check=True, capture_output=True)
     return out_path
+
+
+def burn_subtitles_and_effects(video_path, ass_path, out_path):
+    return encode_video(video_path, out_path, effects_vf(ass_path), audio="copy")
 
 
 def cut_audio(src: str, start: float, end: float, out_path: str, sample_rate: int = 16000) -> str:

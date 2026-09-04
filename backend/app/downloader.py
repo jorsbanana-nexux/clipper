@@ -36,7 +36,7 @@ def _ffmpeg_cut(src: str, start: float, end: float, out: str) -> str:
     else:
         cmd = [
             FFMPEG, "-ss", str(start), "-t", str(dur), "-i", src,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF),
             "-c:a", "aac", "-avoid_negative_ts", "make_zero", "-y", out,
         ]
     subprocess.run(cmd, check=True, capture_output=True)
@@ -54,7 +54,7 @@ def precise_trim(src: str, start: float, end: float, out: str) -> str:
     dur = max(0.05, end - start)
     cmd = [
         FFMPEG, "-i", src, "-ss", str(start), "-t", str(dur),
-        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+        "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF),
         "-c:a", "aac", "-avoid_negative_ts", "make_zero", "-y", out,
     ]
     subprocess.run(cmd, check=True, capture_output=True)

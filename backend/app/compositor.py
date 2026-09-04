@@ -34,7 +34,7 @@ def _cut_video(video_path: str, start: float, end: float, out_path: str) -> str:
     dur = end - start
     subprocess.run([
         FFMPEG, "-ss", str(start), "-t", str(dur), "-i", video_path,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+        "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF),
         "-c:a", "aac", "-avoid_negative_ts", "make_zero", "-y", out_path,
     ], check=True, capture_output=True)
     return out_path
@@ -46,7 +46,7 @@ def _normalize_video_only(video_path: str, out_path: str) -> str:
     subprocess.run([
         FFMPEG, "-i", video_path,
         "-vf", f"scale={TW}:{TH},setsar=1,fps=30,format=yuv420p",
-        "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-y", out_path,
+        "-an", "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF), "-y", out_path,
     ], check=True, capture_output=True)
     return out_path
 
@@ -91,7 +91,7 @@ def _xfade_concat(seg_files: list[str], out_path: str) -> str:
         prev = out_label
 
     cmd += ["-filter_complex", ";".join(fc), "-map", "[vout]",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-y", out_path]
+            "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF), "-y", out_path]
     subprocess.run(cmd, check=True, capture_output=True)
     return out_path
 

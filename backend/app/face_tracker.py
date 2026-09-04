@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from . import config
+from . import renderer
 
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
@@ -251,11 +252,13 @@ def _xcx_at(t, ts: list[float], cxs: list[float]) -> float:
     return cxs[-1]
 
 
-def reframe_to_vertical(video_path: str, output_path: str, samples: list[FaceSample]) -> str:
-    """Single-speaker crop-follow (v0.1 behavior)."""
+def reframe_to_vertical(video_path: str, output_path: str, samples: list[FaceSample],
+                        ass_path: str | None = None) -> str:
+    """Single-speaker crop-follow (v0.1 behavior). When `ass_path` is given, the
+    subtitle + effects are folded into the SAME encode pass (faster batch)."""
     if samples:
-        return _reframe_crop_follow(video_path, output_path, samples)
-    return _reframe_blur_pad(video_path, output_path)
+        return _reframe_crop_follow(video_path, output_path, samples, ass_path)
+    return _reframe_blur_pad(video_path, output_path, ass_path)
 
 
 def _probe_dims(video_path: str) -> tuple[int, int]:
@@ -272,18 +275,19 @@ def _probe_dims(video_path: str) -> tuple[int, int]:
         return 1920, 1080
 
 
-def reframe_duo(video_path: str, output_path: str) -> str:
+def reframe_duo(video_path: str, output_path: str, ass_path: str | None = None) -> str:
     """Two-speaker split-screen -> stacked top & bottom bands (9:16).
 
     Splits the source into LEFT and RIGHT halves (for two speakers sitting
     side-by-side), scales each half to a 1080x960 band, then stacks them
-    vertically. Audio is copied (timing unchanged -> stays in sync).
+    vertically. When `ass_path` is given, subtitle + effects are folded into the
+    SAME encode pass (faster batch). Audio is copied (timing unchanged).
     """
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
     band_h = TH // 2
     W, H = _probe_dims(video_path)
     if W < 8 or H < 8:
-        return _reframe_blur_pad(video_path, output_path)
+        return _reframe_blur_pad(video_path, output_path, ass_path)
     half_w = W // 2
 
     vf = (
@@ -296,15 +300,18 @@ def reframe_duo(video_path: str, output_path: str) -> str:
         f"crop={TW}:{band_h}[right];"
         f"[left][right]vstack=inputs=2"
     )
+    if ass_path:
+        vf += "," + renderer.effects_vf(ass_path)
 
     subprocess.run([
         FFMPEG, "-i", video_path, "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "copy", "-y", output_path,
+        "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF),
+        "-c:a", "copy", "-y", output_path,
     ], check=True, capture_output=True)
     return output_path
 
 
-def _reframe_crop_follow(video_path, output_path, samples):
+def _reframe_crop_follow(video_path, output_path, samples, ass_path=None):
     """Face-follow crop to 9:16 via ffmpeg PIPE decode + cv2 crop + ffmpeg encode.
 
     Root cause of "Unknown C++ exception from OpenCV": reading/writing frames
@@ -359,8 +366,9 @@ def _reframe_crop_follow(video_path, output_path, samples):
     enc = subprocess.Popen(
         [FFMPEG, "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
          "-s", f"{TW}x{TH}", "-r", str(fps), "-i", "-",
-         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-         "-pix_fmt", "yuv420p", vpath],
+         "-vf", renderer.effects_vf(ass_path),
+         "-threads", "0", "-c:v", "libx264", "-preset", config.FFMPEG_PRESET,
+         "-crf", str(config.FFMPEG_CRF), "-pix_fmt", "yuv420p", vpath],
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     idx = 0
@@ -423,7 +431,7 @@ def _probe_fps(video_path: str) -> float:
     return fps
 
 
-def _reframe_blur_pad(video_path, output_path):
+def _reframe_blur_pad(video_path, output_path, ass_path=None):
     TW, TH = config.TARGET_WIDTH, config.TARGET_HEIGHT
     vf = (
         f"split[bg][fg];"
@@ -434,7 +442,7 @@ def _reframe_blur_pad(video_path, output_path):
     )
     subprocess.run([
         FFMPEG, "-i", video_path, "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "aac", "-y", output_path,
+        "-c:v", "libx264", "-preset", config.FFMPEG_PRESET, "-crf", str(config.FFMPEG_CRF), "-c:a", "aac", "-y", output_path,
     ], check=True, capture_output=True)
     return output_path
 
@@ -442,6 +450,6 @@ def _reframe_blur_pad(video_path, output_path):
 def _mux_audio(video_src, video_no_audio, output):
     subprocess.run([
         FFMPEG, "-i", video_no_audio, "-i", video_src,
-        "-map", "0:v:0", "-map", "1:a:0?", "-c:v", "libx264", "-preset", "fast",
-        "-crf", "23", "-c:a", "aac", "-shortest", "-y", output,
+        "-map", "0:v:0", "-map", "1:a:0?", "-c:v", "libx264", "-preset", config.FFMPEG_PRESET,
+        "-crf", str(config.FFMPEG_CRF), "-c:a", "aac", "-shortest", "-y", output,
     ], check=True, capture_output=True)

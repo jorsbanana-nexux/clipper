@@ -74,9 +74,10 @@ TARGET_WIDTH: int = 1080
 TARGET_HEIGHT: int = 1920
 
 # --- Subtitle style ---
-# Mr Beast style: extra-bold font (Montserrat Black). Override to your own
-# bold font file if you bundle one via CLIPPER_FONT_DIR.
-SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Montserrat Black")
+# Mr Beast style: the brand font is Komika Axis (extra-bold). If you put a
+# Komika Axis .ttf/.otf in CLIPPER_FONT_DIR (or repo/fonts), libass resolves it;
+# otherwise it falls back to the closest bold system font.
+SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Komika Axis")
 # Font size is auto-scaled to fit max 2 lines on the safe area. This is the
 # base size before auto-fit. Mr Beast style = big, bold, high-contrast.
 SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "100"))
@@ -85,10 +86,11 @@ MAX_SUBTITLE_LINES: int = int(os.environ.get("CLIPPER_SUBTITLE_LINES", "2"))
 # Karaoke word-pop colours. Base = colour of not-yet-spoken words (white);
 # pop = colour the ACTIVE (being-spoken) word fills to. In ASS the karaoke
 # fill uses SecondaryColour, so we set Base=Primary and Pop=Secondary.
-# Mr Beast brand yellow. ASS colour format is &HAABBGGRR, so yellow #FFD600
-# (R=FF,G=D6,B=00) is &H0000D6FF — NOT &H00D600FF (that is magenta).
+# ASS colour format is &HAABBGGRR.
+# Active (being-spoken) word = bright saturated BLUE (Mr Beast highlighter).
+# #1E90FF = R=1E, G=90, B=FF -> &H00FF901E. Rest of words stay WHITE.
 SUBTITLE_BASE_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BASE_COLOR", "&H00FFFFFF")
-SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H0000D6FF")
+SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H00FF901E")
 # Thick dark outline = readable over any busy/facial background (Mr Beast look).
 SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "8"))
 SUBTITLE_SHADOW: int = int(os.environ.get("CLIPPER_SUBTITLE_SHADOW", "3"))
@@ -96,7 +98,15 @@ SUBTITLE_SHADOW: int = int(os.environ.get("CLIPPER_SUBTITLE_SHADOW", "3"))
 SUBTITLE_BACK_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BACK_COLOR", "&H70141014")
 # Scale-pop animation: the ACTIVE word scales up to this fraction (1.0 = off).
 # Mr Beast style uses a punchy per-word pop that reads instantly on rewatches.
-SUBTITLE_POP: float = float(os.environ.get("CLIPPER_SUBTITLE_POP", "1.18"))
+SUBTITLE_POP: float = float(os.environ.get("CLIPPER_SUBTITLE_POP", "1.25"))
+# How many words per subtitle cue (Mr Beast style = short, ~2). Keeps text
+# glanceable instead of a wall of text.
+MAX_SUBTITLE_WORDS: int = int(os.environ.get("CLIPPER_SUBTITLE_WORDS", "2"))
+# Minimum a cue stays on screen (seconds). Prevents fast speakers from making
+# subtitles flicker/chaotic: when speech is faster than this, more words are
+# joined into the same cue (up to MAX_SUBTITLE_WORDS_OVERFLOW) instead of rushing.
+MIN_SUBTITLE_DUR: float = float(os.environ.get("CLIPPER_SUBTITLE_MIN_DUR", "0.9"))
+MAX_SUBTITLE_WORDS_OVERFLOW: int = int(os.environ.get("CLIPPER_SUBTITLE_WORDS_OVERFLOW", "5"))
 
 # --- Multi-speaker (v0.2) ---
 # Diarization is OPTIONAL and heavy (torch). Enable only if you have a
@@ -115,7 +125,10 @@ CUT_MODE: str = os.environ.get("CLIPPER_CUT_MODE", "accurate")
 
 # Directory with subtitle fonts (optional). If set and non-empty, ASS render uses
 # fontsdir=... so the chosen SUBTITLE_FONT is bundled reliably.
-FONT_DIR: str = os.environ.get("CLIPPER_FONT_DIR", "")
+# If you drop a Komika Axis .ttf/.otf in <repo>/fonts it is used automatically.
+_DEFAULT_FONTS = _REPO_ROOT / "fonts"
+FONT_DIR: str = os.environ.get(
+    "CLIPPER_FONT_DIR", str(_DEFAULT_FONTS) if _DEFAULT_FONTS.is_dir() else "")
 
 # Retention: delete job output folders older than N days (0 = keep forever).
 RETENTION_DAYS: float = float(os.environ.get("CLIPPER_RETENTION_DAYS", "7"))
@@ -125,8 +138,23 @@ YDL_COOKIES_FILE: str = os.environ.get("YDL_COOKIES_FILE", "")   # path to cooki
 YDL_PROXY: str = os.environ.get("YDL_PROXY", "")                 # e.g. http://127.0.0.1:8888
 YDL_RETRIES: int = int(os.environ.get("YDL_RETRIES", "3"))
 
-# Clip rendering concurrency. Default 1 (sequential) = low-spec friendly.
-MAX_PARALLEL: int = int(os.environ.get("CLIPPER_MAX_PARALLEL", "3"))
+# Clip rendering concurrency (BATCH / performance).
+# Default is CPU-aware so a local machine is used fully but not overloaded:
+# min(8, max(2, cpu_count//2)). Tune via CLIPPER_MAX_PARALLEL (e.g. 1 for a
+# weak laptop, 8 for a beefy desktop) to render 10-100 clips fast & stably.
+def _default_parallel() -> int:
+    try:
+        n = os.cpu_count() or 4
+    except Exception:
+        n = 4
+    return max(2, min(8, n // 2))
+MAX_PARALLEL: int = int(os.environ.get("CLIPPER_MAX_PARALLEL", str(_default_parallel())))
+
+# --- FFmpeg speed/quality (BATCH / performance) ---
+# Preset trades encode speed vs CPU. `veryfast` is ~2-3x faster than `fast` with
+# near-equal visual quality at a slightly higher CRF — best for local batch.
+FFMPEG_PRESET: str = os.environ.get("CLIPPER_FFMPEG_PRESET", "veryfast")
+FFMPEG_CRF: int = int(os.environ.get("CLIPPER_FFMPEG_CRF", "21"))
 
 # --- Face framing (camera) ---
 # Zoom-out factor for the 9:16 crop-follow. 1.0 = tight full-height fill (face
