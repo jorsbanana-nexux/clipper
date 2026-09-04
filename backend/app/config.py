@@ -76,18 +76,25 @@ TARGET_HEIGHT: int = 1920
 # --- Subtitle style ---
 SUBTITLE_FONT: str = os.environ.get("CLIPPER_SUBTITLE_FONT", "Montserrat")
 # Font size is auto-scaled to fit max 2 lines on the safe area. This is the
-# base size before auto-fit.
-SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "84"))
+# base size before auto-fit. Mr Beast style = big, bold, high-contrast.
+SUBTITLE_SIZE: int = int(os.environ.get("CLIPPER_SUBTITLE_SIZE", "100"))
 # Max subtitle lines shown at once (2 = standard vertical-video safe area).
 MAX_SUBTITLE_LINES: int = int(os.environ.get("CLIPPER_SUBTITLE_LINES", "2"))
 # Karaoke word-pop colours. Base = colour of not-yet-spoken words (white);
-# pop = colour the ACTIVE (being-spoken) word fades to. In ASS the karaoke
+# pop = colour the ACTIVE (being-spoken) word fills to. In ASS the karaoke
 # fill uses SecondaryColour, so we set Base=Primary and Pop=Secondary.
+# Mr Beast brand yellow. ASS colour format is &HAABBGGRR, so yellow #FFD600
+# (R=FF,G=D6,B=00) is &H0000D6FF — NOT &H00D600FF (that is magenta).
 SUBTITLE_BASE_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BASE_COLOR", "&H00FFFFFF")
-SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H0030D6FF")
-SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "5"))
+SUBTITLE_POP_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_POP_COLOR", "&H0000D6FF")
+# Thick dark outline = readable over any busy/facial background (Mr Beast look).
+SUBTITLE_OUTLINE: int = int(os.environ.get("CLIPPER_SUBTITLE_OUTLINE", "8"))
+SUBTITLE_SHADOW: int = int(os.environ.get("CLIPPER_SUBTITLE_SHADOW", "3"))
 # Back box opacity (semi-transparent) behind text for readability on any frame.
-SUBTITLE_BACK_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BACK_COLOR", "&H80000000")
+SUBTITLE_BACK_COLOR: str = os.environ.get("CLIPPER_SUBTITLE_BACK_COLOR", "&H70141014")
+# Scale-pop animation: the ACTIVE word scales up to this fraction (1.0 = off).
+# Mr Beast style uses a punchy per-word pop that reads instantly on rewatches.
+SUBTITLE_POP: float = float(os.environ.get("CLIPPER_SUBTITLE_POP", "1.18"))
 
 # --- Multi-speaker (v0.2) ---
 # Diarization is OPTIONAL and heavy (torch). Enable only if you have a
@@ -140,6 +147,10 @@ DUO_LEAD_SEC: float = float(os.environ.get("CLIPPER_DUO_LEAD_SEC", "2.5"))
 DUO_AUTO_FACES: bool = os.environ.get("CLIPPER_DUO_AUTO_FACES", "1") in ("1", "true", "yes", "on")
 # Min fraction of sampled frames that must show 2 faces before auto-duo kicks in.
 DUO_AUTO_FACE_RATIO: float = float(os.environ.get("CLIPPER_DUO_AUTO_FACE_RATIO", "0.35"))
+# When diarization is available, a DUO segment is only kept if two faces are
+# actually visible in that window (>= this fraction of samples). Prevents a
+# split-screen from showing an empty half when the camera cuts to close-ups.
+DUO_FACE_RATIO: float = float(os.environ.get("CLIPPER_DUO_FACE_RATIO", "0.4"))
 
 # --- Cut accuracy ---
 # After downloading a segment, re-trim it precisely to the exact [start, end]

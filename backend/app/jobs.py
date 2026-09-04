@@ -89,6 +89,32 @@ def _cleanup_old_jobs() -> None:
                 continue
 
 
+def _validate_duo_with_faces(timeline: list[dict], counts: list[tuple],
+                             ratio: float = 0.4) -> list[dict]:
+    """Downgrade any DUO segment that does NOT actually show two faces to SINGLE.
+
+    `counts` = [(t, n_faces)] in LOCAL clip time. A duo window with too few
+    two-face samples means the camera cut to a single close-up, so a split-screen
+    would show an empty half — switch it to crop-follow instead.
+    """
+    out: list[dict] = []
+    for s in timeline:
+        if s["layout"] == layout.LAYOUT_DUO:
+            win = [n for (t, n) in counts if s["start"] <= t <= s["end"]]
+            if win and sum(1 for n in win if n >= 2) / len(win) < ratio:
+                s = dict(s)
+                s["layout"] = layout.LAYOUT_SINGLE
+        out.append(s)
+    # merge adjacent same-layout segments
+    merged: list[dict] = []
+    for s in out:
+        if merged and merged[-1]["layout"] == s["layout"]:
+            merged[-1]["end"] = max(merged[-1]["end"], s["end"])
+        else:
+            merged.append(s)
+    return merged
+
+
 async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, full_words, work_dir):
     """Render a single clip end-to-end. Returns a ClipInfo, or raises on error."""
     head_pad = config.PADDING_SEC
@@ -155,6 +181,19 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
         # closes back to solo when a speaker is alone for too long.
         timeline = layout.layout_timeline(turns, 0.0, loc_dur, config.DUO_LEAD_SEC)
         timeline = [s for s in timeline if s["end"] > s["start"]]
+        # VIEWER-AWARE: diarization tells us WHEN someone talks, not whether both
+        # are visible. If the camera cuts between close-ups (only one face in the
+        # duo window), a split-screen would show an empty half. Downgrade such
+        # duo segments to single (crop-follow) so it never looks broken.
+        if any(s["layout"] == layout.LAYOUT_DUO for s in timeline):
+            try:
+                counts = await asyncio.to_thread(
+                    face_tracker.face_counts_over_time, raw_path)
+                if counts and len(counts) >= 3:
+                    timeline = _validate_duo_with_faces(
+                        timeline, counts, getattr(config, "DUO_FACE_RATIO", 0.4))
+            except Exception:
+                pass  # keep the diarization-based plan on any analysis error
     elif getattr(config, "DUO_AUTO_FACES", True):
         # Free fallback so split-screen works WITHOUT diarization/token: if two
         # faces are consistently visible, auto-switch the whole clip to duo.
@@ -204,7 +243,11 @@ async def _render_one_clip(job, url, hl, index, used_captions, caption_lang, ful
     if local_words:
         job.update(status="rendering", stage=f"reframe_{index}/subs",
                    message=f"Clip {index}: membakar subtitle word-by-word + efek")
-        ass_content = subtitles.words_to_ass(local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT)
+        # Layout-aware subtitle: if the clip has any duo (split-screen) segment,
+        # position text in the center seam so it doesn't cover the lower face.
+        sub_mode = "duo" if any(s.get("layout") == layout.LAYOUT_DUO for s in timeline) else "single"
+        ass_content = subtitles.words_to_ass(
+            local_words, config.TARGET_WIDTH, config.TARGET_HEIGHT, sub_mode)
         Path(ass_path).write_text(ass_content, encoding="utf-8")
 
     final = str(seg_dir / "final.mp4")

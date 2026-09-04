@@ -1,8 +1,15 @@
-"""ASS subtitle generation with word-by-word (karaoke) highlighting.
+"""ASS subtitle generation — Mr Beast style word-by-word karaoke + pop animation.
 
-A2 (Fase A): if config.FONT_DIR is set, the ASS script includes a `fontsdir`
-line so ffmpeg encodes with the bundled font instead of silently falling back
-to a system default (which can render incorrectly or look different).
+Design goals (editor-aware, viewer-focused):
+- Big, ultra-bold, high-contrast text (thick dark outline + shadow) so it stays
+  readable over any busy or facial background — no need to carefully avoid faces.
+- Word-by-word karaoke fill (`\\kf`): the ACTIVE (being-spoken) word fills with an
+  accent colour while the rest stay white.
+- Per-word scale POP (`\\t \\fscx/\\fscy`): the active word scales up then back,
+  the "punchy" Mr Beast feel that makes text glanceable on rewatch.
+- Auto-fit: text is grouped so it never exceeds MAX_SUBTITLE_LINES (2) lines.
+- Positioning is layout-aware: `mode="duo"` lifts text into the safe center zone
+  so it sits between the two split-screen faces instead of over the lower one.
 """
 import os
 import re
@@ -10,9 +17,8 @@ from pathlib import Path
 
 from . import config
 
-# Sentence punctuation stripped from words so captions look clean and efficient
-# (per spec: remove all commas/periods). Internal apostrophes are kept so
-# contractions like "don't" stay readable.
+# Sentence punctuation stripped from words so captions look clean and efficient.
+# Internal apostrophes are kept so contractions like "don't" stay readable.
 _PUNCT = re.compile(r"[.,!?;:…—–\u2026]+")
 _WORD_CHARS = r"\w'’"
 
@@ -34,14 +40,12 @@ def _resolve_font(font_name: str) -> str:
         if d.exists():
             for cand in d.iterdir():
                 if cand.suffix.lower() in (".ttf", ".otf") and cand.stem.lower() == font_name.lower():
-                    # Use the file stem as the family for reliable matching.
                     return cand.stem
     return font_name
 
 
 def _clean_word(word: str) -> str:
-    """Remove sentence punctuation from a word (keep internal apostrophes).
-    Strips ALL leading/trailing non-word chars, not just one."""
+    """Remove sentence punctuation from a word (keep internal apostrophes)."""
     w = _PUNCT.sub("", word)
     w = re.sub(rf"^[{_WORD_CHARS}]*[^\w'’]+", "", w)
     w = re.sub(rf"[^\w'’]+[{_WORD_CHARS}]*$", "", w)
@@ -49,17 +53,13 @@ def _clean_word(word: str) -> str:
 
 
 def _max_chars_per_line(width: int, font_size: int) -> int:
-    """Rough glyph budget per line. Average glyph width ~0.52 * font size;
-    cap at 92% of the safe area so text never touches the edges."""
     safe = int(width * 0.92)
     per_char = max(4.0, font_size * 0.52)
     return max(4, int(safe / per_char))
 
 
 def _build_groups(words: list[dict], width: int, height: int) -> list[list[dict]]:
-    """Group words so each displayed group fits in at most MAX_SUBTITLE_LINES
-    lines. Greedy: add a word if the resulting text still fits; otherwise start
-    a new group. This guarantees text never exceeds the allowed line count."""
+    """Group words so each group fits in at most MAX_SUBTITLE_LINES lines."""
     size = config.SUBTITLE_SIZE
     budget = _max_chars_per_line(width, size)
     max_lines = max(1, config.MAX_SUBTITLE_LINES)
@@ -90,7 +90,23 @@ def _build_groups(words: list[dict], width: int, height: int) -> list[list[dict]
     return groups
 
 
-def words_to_ass(words: list[dict], width: int, height: int) -> str:
+def _word_tags(w: dict, line_start: float) -> str:
+    """Override tags for one word: karaoke fill + scale-pop animation.
+
+    The karaoke `\\kf` fills the ACTIVE word with the secondary (pop) colour.
+    The `\\t(start,end,\\fscx\\fscy)` transform scales that word up during its
+    own spoken window then back, so each word "pops" precisely as it's spoken.
+    Times are centiseconds relative to the line start.
+    """
+    t0 = max(0, int(round((w["start"] - line_start) * 100)))
+    t1 = max(t0 + 1, int(round((w["end"] - line_start) * 100)))
+    d = max(1, t1 - t0)
+    pop = max(1.0, float(getattr(config, "SUBTITLE_POP", 1.18)))
+    scale = int(round(pop * 100))
+    return f"{{\\kf{d}\\t({t0},{t1},\\fscx{scale}\\fscy{scale})}}"
+
+
+def words_to_ass(words: list[dict], width: int, height: int, mode: str = "single") -> str:
     font = _resolve_font(config.SUBTITLE_FONT)
     size = config.SUBTITLE_SIZE
 
@@ -102,8 +118,17 @@ def words_to_ass(words: list[dict], width: int, height: int) -> str:
     pop_col = config.SUBTITLE_POP_COLOR     # accent — the word being spoken
     back_col = config.SUBTITLE_BACK_COLOR
     outline = config.SUBTITLE_OUTLINE
-    margin_v = int(height * 0.16)  # ~16% from bottom = clear of like/comment UI
+    shadow = config.SUBTITLE_SHADOW
     margin_lr = int(width * 0.03)
+
+    # Layout-aware vertical position (editor/audience perspective):
+    # - single: face sits in the upper area (headroom), so bottom ~13% is clear.
+    # - duo:    faces occupy top & bottom bands; lift text into the center seam
+    #           so it reads between the two speakers instead of over the lower one.
+    if mode == "duo":
+        margin_v = int(height * 0.46)   # center seam
+    else:
+        margin_v = int(height * 0.13)
 
     header = (
         "[Script Info]\n"
@@ -119,7 +144,7 @@ def words_to_ass(words: list[dict], width: int, height: int) -> str:
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Word,{font},{size},{base_col},{pop_col},"
-        f"&H00000000,{back_col},-1,0,0,0,100,100,0,0,1,{outline},2,2,{margin_lr},{margin_lr},{margin_v},1\n\n"
+        f"&H00000000,{back_col},-1,0,0,0,100,100,0,0,1,{outline},{shadow},2,{margin_lr},{margin_lr},{margin_v},1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
@@ -129,15 +154,14 @@ def words_to_ass(words: list[dict], width: int, height: int) -> str:
     for group in groups:
         start = group[0]["start"]
         end = group[-1]["end"]
-        total_cs = max(1, int(round((end - start) * 100)))
-        dur_total = max(1e-6, sum(max(0.0, w["end"] - w["start"]) for w in group))
         parts = []
         for w in group:
-            d = max(0.02, w["end"] - w["start"])
-            # \kf = karaoke fade: the active word smoothly fades to the pop
-            # colour, driven by the word's real duration (accurate sync).
-            k = max(1, int(round((d / dur_total) * total_cs)))
-            parts.append(f"{{\\kf{k}}}{_clean_word(w['word'])}")
+            cleaned = _clean_word(w["word"])
+            if not cleaned:
+                continue
+            parts.append(f"{_word_tags(w, start)}{cleaned}")
+        if not parts:
+            continue
         text = " ".join(parts)
         out.append(f"Dialogue: 0,{_fmt_ts(start)},{_fmt_ts(end)},Word,,0,0,0,,{text}")
 

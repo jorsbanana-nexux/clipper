@@ -210,6 +210,29 @@ def has_two_speakers(video_path: str, min_ratio: float = 0.35,
     return two / len(frames) >= min_ratio
 
 
+def face_counts_over_time(video_path: str, sample_interval: float = 0.5) -> list[tuple]:
+    """Return [(t, n_faces)] sampled over the clip (local timeline 0..duration).
+
+    Used to decide, per time-window, whether two people are ACTUALLY visible.
+    Timing from diarization says *when someone talks*; this says *whether both
+    are on screen* — the two can differ when the camera cuts between close-ups.
+    """
+    frames = analyze_faces_all(video_path, sample_interval)
+    return [(f.t, len(f.faces)) for f in frames]
+
+
+def window_has_two_faces(video_path: str, start: float, end: float,
+                         ratio: float = 0.4, sample_interval: float = 0.5) -> bool:
+    """True when two faces are visible in >= `ratio` of samples inside [start,end]."""
+    counts = face_counts_over_time(video_path, sample_interval)
+    if not counts:
+        return False
+    in_win = [n for (t, n) in counts if start <= t <= end]
+    if not in_win:
+        return False
+    return sum(1 for n in in_win if n >= 2) / len(in_win) >= ratio
+
+
 def _xcx_at(t, ts: list[float], cxs: list[float]) -> float:
     """Interpolate a centre-x series at time t."""
     if not ts:
